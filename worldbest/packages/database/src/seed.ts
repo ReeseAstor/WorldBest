@@ -1,436 +1,283 @@
 import { PrismaClient } from '@prisma/client';
+import { SubscriptionPlan, UserRole } from '@worldbest/shared-types';
 import bcrypt from 'bcryptjs';
-import { faker } from '@faker-js/faker';
 
 const prisma = new PrismaClient();
 
-async function seed() {
+async function main() {
   console.log('🌱 Starting database seed...');
 
-  try {
-    // Clean existing data
-    await prisma.$transaction([
-      prisma.notification.deleteMany(),
-      prisma.auditLog.deleteMany(),
-      prisma.moderationReport.deleteMany(),
-      prisma.importJob.deleteMany(),
-      prisma.exportJob.deleteMany(),
-      prisma.fineTuneJob.deleteMany(),
-      prisma.promptTemplate.deleteMany(),
-      prisma.aIGeneration.deleteMany(),
-      prisma.referral.deleteMany(),
-      prisma.userCredit.deleteMany(),
-      prisma.usage.deleteMany(),
-      prisma.lineItem.deleteMany(),
-      prisma.invoice.deleteMany(),
-      prisma.subscriptionAddon.deleteMany(),
-      prisma.subscription.deleteMany(),
-      prisma.styleProfile.deleteMany(),
-      prisma.era.deleteMany(),
-      prisma.timelineEvent.deleteMany(),
-      prisma.timeline.deleteMany(),
-      prisma.economy.deleteMany(),
-      prisma.language.deleteMany(),
-      prisma.locationCulture.deleteMany(),
-      prisma.culture.deleteMany(),
-      prisma.location.deleteMany(),
-      prisma.relationship.deleteMany(),
-      prisma.secret.deleteMany(),
-      prisma.character.deleteMany(),
-      prisma.placeholder.deleteMany(),
-      prisma.textVersion.deleteMany(),
-      prisma.sceneCharacter.deleteMany(),
-      prisma.scene.deleteMany(),
-      prisma.chapter.deleteMany(),
-      prisma.book.deleteMany(),
-      prisma.projectCollaborator.deleteMany(),
-      prisma.project.deleteMany(),
-      prisma.teamMember.deleteMany(),
-      prisma.team.deleteMany(),
-      prisma.apiKey.deleteMany(),
-      prisma.session.deleteMany(),
-      prisma.userAchievement.deleteMany(),
-      prisma.user.deleteMany(),
-    ]);
-
-    console.log('✅ Cleaned existing data');
-
-    // Create demo users
-    const users = await Promise.all([
-      createUser('demo@worldbest.ai', 'Demo User', 'demo123', 'story_starter'),
-      createUser('author@worldbest.ai', 'Jane Author', 'author123', 'solo_author'),
-      createUser('pro@worldbest.ai', 'Pro Creator', 'pro123', 'pro_creator'),
-      createUser('team@worldbest.ai', 'Team Lead', 'team123', 'studio_team'),
-    ]);
-
-    console.log('✅ Created demo users');
-
-    // Create a demo team
-    const team = await prisma.team.create({
-      data: {
-        name: 'Story Studios',
-        slug: 'story-studios',
-        description: 'A creative writing team',
-        ownerId: users[3].id,
-        plan: 'studio_team',
-        billingEmail: 'billing@storystudios.com',
-        seatsLimit: 5,
-        seatsUsed: 2,
-        members: {
-          create: [
-            {
-              userId: users[3].id,
-              role: 'owner',
-              permissions: ['all'],
-              status: 'active',
-              invitedBy: users[3].id,
-              joinedAt: new Date(),
-            },
-            {
-              userId: users[2].id,
-              role: 'editor',
-              permissions: ['read', 'write', 'comment'],
-              status: 'active',
-              invitedBy: users[3].id,
-              joinedAt: new Date(),
-            },
-          ],
-        },
-      },
-    });
-
-    console.log('✅ Created demo team');
-
-    // Create style profiles
-    const styleProfiles = await Promise.all([
-      prisma.styleProfile.create({
-        data: {
-          userId: users[1].id,
-          name: 'Contemporary Fiction',
-          toneFormality: 3,
-          toneHumor: 2,
-          toneDarkness: 2,
-          toneRomance: 3,
-          toneAction: 2,
-          overallPace: 'moderate',
-          dialogueDensity: 'balanced',
-          descriptionDetail: 'moderate',
-          chapterLength: 'medium',
-          vocabComplexity: 'moderate',
-          preferredWords: ['vivid', 'compelling', 'nuanced'],
-          avoidedWords: ['very', 'really', 'just'],
-          useProfanity: false,
-          dialectPrefs: ['standard'],
-          tabooList: [],
-          inspirationAuthors: ['Margaret Atwood', 'Kazuo Ishiguro'],
-          exampleExcerpts: [],
-        },
-      }),
-      prisma.styleProfile.create({
-        data: {
-          userId: users[2].id,
-          name: 'Epic Fantasy',
-          toneFormality: 4,
-          toneHumor: 1,
-          toneDarkness: 3,
-          toneRomance: 2,
-          toneAction: 5,
-          overallPace: 'fast',
-          dialogueDensity: 'sparse',
-          descriptionDetail: 'rich',
-          chapterLength: 'long',
-          vocabComplexity: 'complex',
-          preferredWords: ['ancient', 'mystical', 'formidable'],
-          avoidedWords: ['okay', 'awesome', 'cool'],
-          useProfanity: false,
-          dialectPrefs: ['archaic', 'formal'],
-          tabooList: [],
-          inspirationAuthors: ['Brandon Sanderson', 'Patrick Rothfuss'],
-          exampleExcerpts: [],
-        },
-      }),
-    ]);
-
-    console.log('✅ Created style profiles');
-
-    // Create demo projects
-    for (const user of users.slice(1)) {
-      const project = await createDemoProject(user.id, styleProfiles[0].id);
-      console.log(`✅ Created demo project for ${user.email}`);
-    }
-
-    // Create team project
-    const teamProject = await createDemoProject(users[3].id, styleProfiles[1].id, team.id);
-    console.log('✅ Created team project');
-
-    // Create subscriptions
-    for (const user of users) {
-      await createSubscription(user.id, user.plan as string);
-    }
-
-    console.log('✅ Created subscriptions');
-
-    // Create prompt templates
-    await createPromptTemplates();
-    console.log('✅ Created prompt templates');
-
-    console.log('🎉 Database seed completed successfully!');
-  } catch (error) {
-    console.error('❌ Seed error:', error);
-    throw error;
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
-async function createUser(email: string, displayName: string, password: string, plan: string) {
-  const hashedPassword = await bcrypt.hash(password, 10);
-  
-  return prisma.user.create({
-    data: {
-      email,
-      username: email.split('@')[0],
-      displayName,
-      passwordHash: hashedPassword,
-      emailVerified: true,
-      emailVerifiedAt: new Date(),
-      plan,
-      billingCustomerId: `cus_${faker.string.alphanumeric(14)}`,
+  // Create admin user
+  const adminPassword = await bcrypt.hash('admin123!', 12);
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@worldbest.ai' },
+    update: {},
+    create: {
+      email: 'admin@worldbest.ai',
+      display_name: 'Admin User',
+      username: 'admin',
+      password_hash: adminPassword,
+      plan: SubscriptionPlan.ENTERPRISE,
+      roles: [UserRole.SUPER_ADMIN],
+      email_verified: true,
+      email_verified_at: new Date(),
     },
   });
-}
 
-async function createDemoProject(userId: string, styleProfileId: string, teamId?: string) {
-  const genres = ['Fantasy', 'Science Fiction', 'Mystery', 'Romance', 'Thriller'];
-  const genre = faker.helpers.arrayElement(genres);
+  console.log('✅ Admin user created:', admin.email);
 
+  // Create demo user
+  const demoPassword = await bcrypt.hash('demo123!', 12);
+  const demoUser = await prisma.user.upsert({
+    where: { email: 'demo@worldbest.ai' },
+    update: {},
+    create: {
+      email: 'demo@worldbest.ai',
+      display_name: 'Demo User',
+      username: 'demo',
+      password_hash: demoPassword,
+      plan: SubscriptionPlan.PRO_CREATOR,
+      roles: [UserRole.USER],
+      email_verified: true,
+      email_verified_at: new Date(),
+    },
+  });
+
+  console.log('✅ Demo user created:', demoUser.email);
+
+  // Create sample project
   const project = await prisma.project.create({
     data: {
-      ownerId: userId,
-      teamId,
-      title: faker.company.catchPhrase(),
-      synopsis: faker.lorem.paragraph(3),
-      genre,
-      styleProfileId,
-      defaultLanguage: 'en-US',
-      contentRating: 'PG-13',
-      draftModel: 'gpt-4',
-      polishModel: 'gpt-4',
-      books: {
-        create: [
-          {
-            title: 'Book One: ' + faker.company.catchPhrase(),
-            order: 1,
-            blurb: faker.lorem.paragraph(2),
-            targetWordCount: 80000,
-            status: 'drafting',
-            chapters: {
-              create: Array.from({ length: 5 }, (_, i) => ({
-                number: i + 1,
-                title: `Chapter ${i + 1}: ${faker.company.catchPhrase()}`,
-                summary: faker.lorem.paragraph(),
-                targetWordCount: 3000,
-                status: i === 0 ? 'complete' : 'outlined',
-                scenes: {
-                  create: Array.from({ length: 3 }, (_, j) => ({
-                    title: faker.company.catchPhrase(),
-                    mood: faker.helpers.arrayElement(['tense', 'romantic', 'mysterious', 'action-packed']),
-                    conflict: faker.lorem.sentence(),
-                    resolution: j === 2 ? faker.lorem.sentence() : null,
-                  })),
-                },
-              })),
-            },
-          },
-        ],
-      },
-      characters: {
-        create: Array.from({ length: 5 }, () => createCharacterData()),
-      },
-      locations: {
-        create: Array.from({ length: 3 }, () => createLocationData()),
-      },
-    },
-    include: {
-      books: {
-        include: {
-          chapters: {
-            include: {
-              scenes: true,
-            },
-          },
-        },
-      },
-      characters: true,
-      locations: true,
+      owner_id: demoUser.id,
+      title: 'The Chronicles of Aetheria',
+      synopsis: 'A fantasy epic about a young mage discovering her powers in a world where magic is forbidden.',
+      genre: 'Fantasy',
+      default_language: 'en-US',
+      time_period: 'Medieval',
+      target_audience: 'Young Adult',
+      content_rating: 'PG-13',
+      draft_model: 'gpt-4',
+      polish_model: 'gpt-4',
+      temperature_draft: 0.7,
+      temperature_polish: 0.3,
+      max_tokens_per_generation: 2000,
+      visibility: 'private',
     },
   });
 
-  // Add relationships between characters
-  const characters = project.characters;
-  if (characters.length >= 2) {
-    await prisma.relationship.create({
-      data: {
-        characterId: characters[0].id,
-        relatedCharId: characters[1].id,
-        relationshipType: 'friend',
-        description: 'Childhood friends who grew up together',
-        dynamics: 'Supportive but sometimes competitive',
-        tensionPoints: ['Different life goals', 'Past romantic interest'],
-      },
-    });
-  }
+  console.log('✅ Sample project created:', project.title);
 
-  // Add text versions to scenes
-  const scenes = project.books[0].chapters.flatMap(c => c.scenes);
-  for (const scene of scenes.slice(0, 3)) {
-    await prisma.textVersion.create({
-      data: {
-        sceneId: scene.id,
-        authorId: userId,
-        content: faker.lorem.paragraphs(5, '\n\n'),
-        summary: faker.lorem.paragraph(),
-        semanticHash: faker.string.alphanumeric(32),
-        wordCount: faker.number.int({ min: 500, max: 2000 }),
-        aiGenerated: false,
-      },
-    });
-  }
-
-  return project;
-}
-
-function createCharacterData() {
-  return {
-    name: faker.person.fullName(),
-    aliases: [faker.person.firstName()],
-    age: faker.number.int({ min: 18, max: 65 }),
-    gender: faker.helpers.arrayElement(['male', 'female', 'non-binary']),
-    mbti: faker.helpers.arrayElement(['INTJ', 'ENFP', 'ISTP', 'ESFJ', 'INFJ', 'ENTP']),
-    height: faker.helpers.arrayElement(['tall', 'average', 'short']),
-    build: faker.helpers.arrayElement(['athletic', 'slim', 'stocky', 'average']),
-    hair: faker.color.human() + ' hair',
-    eyes: faker.color.human() + ' eyes',
-    distinguishingFeatures: [faker.lorem.words(3)],
-    coreTraits: Array.from({ length: 3 }, () => faker.person.zodiacSign()),
-    quirks: [faker.lorem.words(2)],
-    fears: [faker.lorem.words(3)],
-    desires: [faker.lorem.words(3)],
-    values: [faker.lorem.words(2)],
-    flaws: [faker.lorem.words(2)],
-    strengths: [faker.lorem.words(2)],
-    weaknesses: [faker.lorem.words(2)],
-    backstory: faker.lorem.paragraph(3),
-    vocabularyLevel: 'moderate',
-    speechPatterns: [faker.lorem.words(3)],
-    catchphrases: [faker.company.catchPhrase()],
-    formality: 'neutral',
-  };
-}
-
-function createLocationData() {
-  return {
-    name: faker.location.city(),
-    region: faker.location.state(),
-    description: faker.lorem.paragraph(2),
-    terrain: faker.helpers.arrayElement(['mountains', 'plains', 'forest', 'desert', 'coastal']),
-    climate: faker.helpers.arrayElement(['temperate', 'tropical', 'arctic', 'desert', 'mediterranean']),
-    flora: Array.from({ length: 3 }, () => faker.lorem.word()),
-    fauna: Array.from({ length: 3 }, () => faker.animal.type()),
-    resources: Array.from({ length: 2 }, () => faker.commerce.productMaterial()),
-    hazards: [faker.lorem.words(2)],
-    atmosphere: faker.lorem.sentence(),
-    significance: faker.lorem.sentence(),
-  };
-}
-
-async function createSubscription(userId: string, plan: string) {
-  const now = new Date();
-  const periodEnd = new Date(now);
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-  const tokenLimits: Record<string, number> = {
-    story_starter: 10000,
-    solo_author: 50000,
-    pro_creator: 200000,
-    studio_team: 500000,
-    enterprise: 2000000,
-  };
-
-  return prisma.subscription.create({
+  // Create sample book
+  const book = await prisma.book.create({
     data: {
-      userId,
-      plan,
-      status: 'active',
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      stripeCustomerId: `cus_${faker.string.alphanumeric(14)}`,
-      stripeSubscriptionId: `sub_${faker.string.alphanumeric(14)}`,
-      seats: plan === 'studio_team' ? 5 : 1,
-      aiTokensPerMonth: tokenLimits[plan] || 10000,
-      storageGb: plan === 'enterprise' ? 1000 : plan === 'studio_team' ? 100 : 10,
+      project_id: project.id,
+      title: 'Book 1: The Awakening',
+      order: 1,
+      blurb: 'Elena discovers her magical abilities and must learn to control them while evading the authorities.',
+      target_word_count: 80000,
+      status: 'planning',
     },
   });
-}
 
-async function createPromptTemplates() {
-  const templates = [
+  console.log('✅ Sample book created:', book.title);
+
+  // Create sample chapters
+  const chapters = [
     {
-      name: 'Scene Expansion',
-      description: 'Expand a brief scene outline into a full narrative',
-      persona: 'muse',
-      intent: 'generate_scene',
-      systemPrompt: 'You are a creative writing assistant specializing in scene development.',
-      userPromptTemplate: 'Expand this scene outline into a detailed narrative:\n\n{{outline}}\n\nInclude: {{requirements}}',
-      variables: JSON.stringify([
-        { name: 'outline', type: 'string', required: true },
-        { name: 'requirements', type: 'string', required: false },
-      ]),
-      isPublic: true,
-      category: 'scene',
-      tags: ['scene', 'expansion', 'narrative'],
+      title: 'The Discovery',
+      number: 1,
+      summary: 'Elena accidentally uses magic for the first time.',
+      target_word_count: 3000,
     },
     {
-      name: 'Character Voice',
-      description: 'Generate dialogue in a specific character voice',
-      persona: 'muse',
-      intent: 'create_dialogue',
-      systemPrompt: 'You are an expert at creating authentic character dialogue.',
-      userPromptTemplate: 'Write dialogue for {{character}} in this situation:\n\n{{situation}}',
-      variables: JSON.stringify([
-        { name: 'character', type: 'string', required: true },
-        { name: 'situation', type: 'string', required: true },
-      ]),
-      isPublic: true,
-      category: 'dialogue',
-      tags: ['dialogue', 'character', 'voice'],
+      title: 'The Hunt Begins',
+      number: 2,
+      summary: 'The authorities start searching for the source of the magical disturbance.',
+      target_word_count: 3000,
     },
     {
-      name: 'Plot Beat Analysis',
-      description: 'Analyze story structure and suggest improvements',
-      persona: 'coach',
-      intent: 'analyze',
-      systemPrompt: 'You are a story structure expert who helps writers improve their plots.',
-      userPromptTemplate: 'Analyze the plot structure of:\n\n{{plot_summary}}\n\nFocus on: {{focus_areas}}',
-      variables: JSON.stringify([
-        { name: 'plot_summary', type: 'string', required: true },
-        { name: 'focus_areas', type: 'string', required: false },
-      ]),
-      isPublic: true,
-      category: 'analysis',
-      tags: ['plot', 'structure', 'analysis'],
+      title: 'The Mentor',
+      number: 3,
+      summary: 'Elena meets an old wizard who offers to teach her.',
+      target_word_count: 3000,
     },
   ];
 
-  for (const template of templates) {
-    await prisma.promptTemplate.create({ data: template });
+  for (const chapterData of chapters) {
+    await prisma.chapter.create({
+      data: {
+        book_id: book.id,
+        ...chapterData,
+        status: 'outlined',
+      },
+    });
   }
+
+  console.log('✅ Sample chapters created');
+
+  // Create sample characters
+  const characters = [
+    {
+      name: 'Elena Blackwood',
+      age: 17,
+      gender: 'Female',
+      mbti: 'INFP',
+      height: '5\'6"',
+      build: 'Slim',
+      hair: 'Dark brown, shoulder-length',
+      eyes: 'Hazel',
+      distinguishing_features: ['Small scar on left hand', 'Always wears a silver pendant'],
+      clothing_style: 'Practical, earth tones',
+      appearance_description: 'A young woman with an air of quiet determination and hidden strength.',
+      core_traits: ['Curious', 'Brave', 'Compassionate', 'Stubborn'],
+      quirks: ['Tends to fidget with her pendant when nervous', 'Talks to herself when thinking'],
+      fears: ['Hurting others with her magic', 'Being discovered'],
+      desires: ['To master her powers', 'To protect her family'],
+      values: ['Family', 'Truth', 'Justice'],
+      flaws: ['Impatient', 'Self-doubting', 'Takes too many risks'],
+      strengths: ['Natural magical ability', 'Quick learner', 'Loyal'],
+      weaknesses: ['Lack of control', 'Emotional', 'Reckless'],
+      backstory: 'Elena grew up in a small village where magic was forbidden. She always felt different but never knew why until her powers manifested during a crisis.',
+      vocabulary_level: 'moderate',
+      speech_patterns: ['Uses simple, direct language', 'Occasionally uses old-fashioned phrases'],
+      catchphrases: ['"I have to try"', '"There must be another way"'],
+      dialect: 'Rural',
+      formality: 'casual',
+    },
+    {
+      name: 'Marcus the Wise',
+      age: 67,
+      gender: 'Male',
+      mbti: 'INTJ',
+      height: '6\'2"',
+      build: 'Tall and lean',
+      hair: 'White, long beard',
+      eyes: 'Piercing blue',
+      distinguishing_features: ['Deep wrinkles around eyes', 'Staff with crystal orb'],
+      clothing_style: 'Robe and cloak, deep blue colors',
+      appearance_description: 'An elderly man with an aura of ancient wisdom and quiet power.',
+      core_traits: ['Wise', 'Patient', 'Mysterious', 'Protective'],
+      quirks: ['Always carries his staff', 'Speaks in riddles'],
+      fears: ['Elena being discovered too early', 'The return of dark magic'],
+      desires: ['To pass on his knowledge', 'To prevent magical catastrophe'],
+      values: ['Knowledge', 'Balance', 'Protection'],
+      flaws: ['Secretive', 'Overprotective', 'Stubborn'],
+      strengths: ['Master of multiple magical disciplines', 'Centuries of experience', 'Calm under pressure'],
+      weaknesses: ['Old age limits physical abilities', 'Haunted by past mistakes'],
+      backstory: 'Marcus was once a powerful court wizard who went into hiding after a magical disaster. He has been waiting for the right student to pass on his knowledge.',
+      vocabulary_level: 'complex',
+      speech_patterns: ['Uses archaic language', 'Speaks in metaphors'],
+      catchphrases: ['"Magic is not a tool, it is a responsibility"', '"The old ways hold wisdom"'],
+      dialect: 'Formal',
+      formality: 'formal',
+    },
+  ];
+
+  for (const characterData of characters) {
+    await prisma.character.create({
+      data: {
+        project_id: project.id,
+        ...characterData,
+      },
+    });
+  }
+
+  console.log('✅ Sample characters created');
+
+  // Create sample locations
+  const locations = [
+    {
+      name: 'Millbrook Village',
+      region: 'Northern Kingdoms',
+      description: 'A small, peaceful village nestled in a valley. Known for its mill and friendly inhabitants.',
+      time_period: 'Medieval',
+      terrain: 'Rolling hills and forest',
+      climate: 'Temperate',
+      flora: ['Oak trees', 'Wildflowers', 'Herbs'],
+      fauna: ['Deer', 'Rabbits', 'Songbirds'],
+      resources: ['Fresh water', 'Timber', 'Herbs'],
+      hazards: ['Occasional bandits', 'Wild animals'],
+      atmosphere: 'Peaceful and idyllic',
+      significance: 'Elena\'s hometown and where her story begins',
+    },
+    {
+      name: 'The Crystal Caves',
+      region: 'Mystic Mountains',
+      description: 'A network of caves filled with glowing crystals that amplify magical energy.',
+      time_period: 'Ancient',
+      terrain: 'Underground caverns',
+      climate: 'Cool and damp',
+      flora: ['Glowing mushrooms', 'Crystal formations'],
+      fauna: ['Cave bats', 'Crystal spiders'],
+      resources: ['Magic crystals', 'Rare minerals'],
+      hazards: ['Unstable crystals', 'Dark magic residue'],
+      atmosphere: 'Mysterious and otherworldly',
+      significance: 'Where Marcus teaches Elena advanced magic',
+    },
+  ];
+
+  for (const locationData of locations) {
+    await prisma.location.create({
+      data: {
+        project_id: project.id,
+        ...locationData,
+      },
+    });
+  }
+
+  console.log('✅ Sample locations created');
+
+  // Create sample style profile
+  const styleProfile = await prisma.styleProfile.create({
+    data: {
+      user_id: demoUser.id,
+      name: 'Fantasy Adventure',
+      tone_formality: 3,
+      tone_humor: 2,
+      tone_darkness: 3,
+      tone_romance: 2,
+      tone_action: 4,
+      overall_pace: 'moderate',
+      dialogue_density: 'balanced',
+      description_detail: 'rich',
+      chapter_length: 'medium',
+      vocab_complexity: 'moderate',
+      preferred_words: ['mystical', 'ancient', 'powerful', 'magical'],
+      avoided_words: ['modern', 'technology', 'contemporary'],
+      use_profanity: false,
+      dialect_prefs: ['fantasy', 'medieval'],
+      taboo_list: ['explicit violence', 'sexual content'],
+      inspiration_authors: ['J.R.R. Tolkien', 'Ursula K. Le Guin', 'Brandon Sanderson'],
+      example_excerpts: [
+        'The ancient oak stood sentinel over the village, its branches reaching toward the heavens like gnarled fingers.',
+        'Magic coursed through her veins like liquid fire, both terrifying and exhilarating.',
+      ],
+    },
+  });
+
+  console.log('✅ Sample style profile created');
+
+  // Update project with style profile
+  await prisma.project.update({
+    where: { id: project.id },
+    data: { style_profile_id: styleProfile.id },
+  });
+
+  console.log('🌱 Database seed completed successfully!');
+  console.log('\n📋 Created:');
+  console.log('  - Admin user: admin@worldbest.ai (password: admin123!)');
+  console.log('  - Demo user: demo@worldbest.ai (password: demo123!)');
+  console.log('  - Sample project: The Chronicles of Aetheria');
+  console.log('  - Sample book: Book 1: The Awakening');
+  console.log('  - 3 sample chapters');
+  console.log('  - 2 sample characters');
+  console.log('  - 2 sample locations');
+  console.log('  - 1 style profile');
 }
 
-// Run the seed
-seed()
-  .catch((error) => {
-    console.error(error);
+main()
+  .catch((e) => {
+    console.error('❌ Seed failed:', e);
     process.exit(1);
   })
   .finally(async () => {
