@@ -1,3 +1,17 @@
+Metadata-Version: 2.4
+Name: worldbest
+Version: 0.1.0
+Summary: WorldBest: a tiny example Python package with a CLI.
+Author-email: Your Name <you@example.com>
+License: MIT
+Project-URL: Homepage, https://example.com/worldbest
+Keywords: example,cli,worldbest
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+
 # WorldBest
 
 Small, buildable Python package with a CLI. Use it as a starting point.
@@ -5,13 +19,6 @@ Small, buildable Python package with a CLI. Use it as a starting point.
 ## Quick start
 
 1. Create/activate a Python 3.10+ environment.
-
-   If you're using a virtual environment, something like:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
 
 1. Install dev tools (pytest and build):
 
@@ -31,8 +38,6 @@ pytest -q
 ```bash
 python -m build
 ```
-
-Notes: You may see Setuptools deprecation warnings about license configuration. They are non-blocking for the build; you can switch to an SPDX license expression in `pyproject.toml` later.
 
 1. Try the CLI (without installing):
 

@@ -1,0 +1,2 @@
+[console_scripts]
+worldbest = worldbest.cli:main

@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/worldbest/__init__.py
+src/worldbest/cli.py
+src/worldbest.egg-info/PKG-INFO
+src/worldbest.egg-info/SOURCES.txt
+src/worldbest.egg-info/dependency_links.txt
+src/worldbest.egg-info/entry_points.txt
+src/worldbest.egg-info/top_level.txt
+tests/test_greet.py
