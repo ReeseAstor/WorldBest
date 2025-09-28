@@ -1,0 +1,1047 @@
+// Prisma Schema for WorldBest Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== AUTH & USER MODELS ====================
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  username          String?   @unique
+  displayName       String    @map("display_name")
+  avatarUrl         String?   @map("avatar_url")
+  passwordHash      String?   @map("password_hash")
+  emailVerified     Boolean   @default(false) @map("email_verified")
+  emailVerifiedAt   DateTime? @map("email_verified_at")
+  twoFactorEnabled  Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorSecret   String?   @map("two_factor_secret")
+  
+  plan              String    @default("story_starter")
+  billingCustomerId String?   @map("billing_customer_id")
+  
+  lastLogin         DateTime? @map("last_login")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  
+  // Relations
+  projects          Project[]
+  sessions          Session[]
+  apiKeys           ApiKey[]
+  subscriptions     Subscription[]
+  textVersions      TextVersion[]
+  styleProfiles     StyleProfile[]
+  teamMemberships   TeamMember[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  achievements      UserAchievement[]
+  credits           UserCredit[]
+  referralsSent     Referral[] @relation("ReferrerUser")
+  referralReceived  Referral?  @relation("ReferredUser")
+  fineTuneJobs      FineTuneJob[]
+  exportJobs        ExportJob[]
+  importJobs        ImportJob[]
+  aiGenerations     AIGeneration[]
+  moderationReports ModerationReport[]
+  
+  @@index([email])
+  @@index([username])
+  @@index([plan])
+  @@map("users")
+}
+
+model Session {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  token        String    @unique
+  refreshToken String    @unique @map("refresh_token")
+  expiresAt    DateTime  @map("expires_at")
+  ipAddress    String?   @map("ip_address")
+  userAgent    String?   @map("user_agent")
+  deviceId     String?   @map("device_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  name        String
+  keyHash     String    @unique @map("key_hash")
+  keyPreview  String    @map("key_preview")
+  scopes      String[]
+  expiresAt   DateTime? @map("expires_at")
+  lastUsed    DateTime? @map("last_used")
+  revoked     Boolean   @default(false)
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+// ==================== TEAM & COLLABORATION ====================
+
+model Team {
+  id               String    @id @default(cuid())
+  name             String
+  slug             String    @unique
+  description      String?
+  ownerId          String    @map("owner_id")
+  plan             String    @default("studio_team")
+  billingEmail     String    @map("billing_email")
+  seatsLimit       Int       @map("seats_limit")
+  seatsUsed        Int       @default(0) @map("seats_used")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  
+  // Settings
+  allowGuestAccess Boolean   @default(false) @map("allow_guest_access")
+  require2FA       Boolean   @default(false) @map("require_2fa")
+  ipAllowlist      String[]  @map("ip_allowlist")
+  ssoEnabled       Boolean   @default(false) @map("sso_enabled")
+  ssoProvider      String?   @map("sso_provider")
+  
+  // Relations
+  members          TeamMember[]
+  projects         Project[]
+  subscriptions    Subscription[]
+  auditLogs        AuditLog[]
+  
+  @@index([slug])
+  @@index([ownerId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id         String    @id @default(cuid())
+  teamId     String    @map("team_id")
+  userId     String    @map("user_id")
+  role       String    @default("viewer")
+  permissions String[]
+  status     String    @default("pending")
+  invitedBy  String    @map("invited_by")
+  joinedAt   DateTime? @map("joined_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  
+  team       Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+// ==================== CORE CONTENT MODELS ====================
+
+model Project {
+  id              String    @id @default(cuid())
+  ownerId         String    @map("owner_id")
+  teamId          String?   @map("team_id")
+  title           String
+  synopsis        String?
+  genre           String
+  styleProfileId  String?   @map("style_profile_id")
+  
+  // Settings
+  defaultLanguage String    @default("en-US") @map("default_language")
+  timePeriod      String?   @map("time_period")
+  targetAudience  String?   @map("target_audience")
+  contentRating   String    @default("PG-13") @map("content_rating")
+  
+  // AI Preferences
+  draftModel      String    @default("gpt-4") @map("draft_model")
+  polishModel     String    @default("gpt-4") @map("polish_model")
+  temperatureDraft Float    @default(0.7) @map("temperature_draft")
+  temperaturePolish Float   @default(0.3) @map("temperature_polish")
+  maxTokensPerGen Int      @default(2000) @map("max_tokens_per_generation")
+  
+  visibility      String    @default("private")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  
+  // Relations
+  owner           User      @relation(fields: [ownerId], references: [id])
+  team            Team?     @relation(fields: [teamId], references: [id])
+  styleProfile    StyleProfile? @relation(fields: [styleProfileId], references: [id])
+  books           Book[]
+  characters      Character[]
+  locations       Location[]
+  cultures        Culture[]
+  languages       Language[]
+  economies       Economy[]
+  timelines       Timeline[]
+  collaborators   ProjectCollaborator[]
+  
+  @@index([ownerId])
+  @@index([teamId])
+  @@index([genre])
+  @@index([visibility])
+  @@map("projects")
+}
+
+model ProjectCollaborator {
+  id          String    @id @default(cuid())
+  projectId   String    @map("project_id")
+  userId      String    @map("user_id")
+  role        String    @default("reader")
+  permissions String[]
+  addedAt     DateTime  @default(now()) @map("added_at")
+  
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_collaborators")
+}
+
+model Book {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  title           String
+  order           Int
+  blurb           String?
+  targetWordCount Int?      @map("target_word_count")
+  status          String    @default("planning")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chapters        Chapter[]
+  
+  @@unique([projectId, order])
+  @@index([projectId])
+  @@index([status])
+  @@map("books")
+}
+
+model Chapter {
+  id              String    @id @default(cuid())
+  bookId          String    @map("book_id")
+  number          Int
+  title           String
+  summary         String?
+  targetWordCount Int?      @map("target_word_count")
+  status          String    @default("outlined")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  book            Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  scenes          Scene[]
+  
+  @@unique([bookId, number])
+  @@index([bookId])
+  @@index([status])
+  @@map("chapters")
+}
+
+model Scene {
+  id                String    @id @default(cuid())
+  chapterId         String    @map("chapter_id")
+  title             String
+  locationId        String?   @map("location_id")
+  time              DateTime?
+  povCharacterId    String?   @map("pov_character_id")
+  mood              String?
+  conflict          String?
+  resolution        String?
+  currentVersionId  String?   @map("current_version_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  chapter           Chapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  location          Location? @relation(fields: [locationId], references: [id])
+  povCharacter      Character? @relation("ScenePOV", fields: [povCharacterId], references: [id])
+  characters        SceneCharacter[]
+  placeholders      Placeholder[]
+  textVersions      TextVersion[]
+  
+  @@index([chapterId])
+  @@index([locationId])
+  @@index([povCharacterId])
+  @@map("scenes")
+}
+
+model SceneCharacter {
+  id          String    @id @default(cuid())
+  sceneId     String    @map("scene_id")
+  characterId String    @map("character_id")
+  role        String?   // main, supporting, mentioned
+  
+  scene       Scene     @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  
+  @@unique([sceneId, characterId])
+  @@map("scene_characters")
+}
+
+model TextVersion {
+  id            String    @id @default(cuid())
+  sceneId       String    @map("scene_id")
+  authorId      String    @map("author_id")
+  content       String    @db.Text
+  summary       String?
+  parentId      String?   @map("parent_id")
+  semanticHash  String    @map("semantic_hash")
+  wordCount     Int       @map("word_count")
+  aiGenerated   Boolean   @default(false) @map("ai_generated")
+  aiModel       String?   @map("ai_model")
+  revisionNotes String?   @map("revision_notes")
+  qualityScore  Float?    @map("quality_score")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  scene         Scene     @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  author        User      @relation(fields: [authorId], references: [id])
+  parent        TextVersion? @relation("VersionHistory", fields: [parentId], references: [id])
+  children      TextVersion[] @relation("VersionHistory")
+  
+  @@index([sceneId])
+  @@index([authorId])
+  @@index([parentId])
+  @@index([semanticHash])
+  @@map("text_versions")
+}
+
+model Placeholder {
+  id             String    @id @default(cuid())
+  sceneId        String    @map("scene_id")
+  type           String    // violence, intimacy, profanity, trauma, custom
+  intensity      String    // mild, moderate, intense, extreme
+  consentRequired Boolean  @default(false) @map("consent_required")
+  purpose        String
+  renderingMode  String    @map("rendering_mode") // implied, suggestive, fade_to_black, blocked, full
+  fallbackText   String?   @map("fallback_text")
+  tags           String[]
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  
+  scene          Scene     @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  
+  @@index([sceneId])
+  @@index([type])
+  @@map("placeholders")
+}
+
+// ==================== WORLDBUILDING MODELS ====================
+
+model Character {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  name            String
+  aliases         String[]
+  age             Int?
+  gender          String?
+  orientation     String?
+  mbti            String?
+  
+  // Appearance
+  height          String?
+  build           String?
+  hair            String?
+  eyes            String?
+  distinguishingFeatures String[] @map("distinguishing_features")
+  clothingStyle   String?   @map("clothing_style")
+  appearanceDesc  String?   @map("appearance_description")
+  
+  // Personality
+  coreTraits      String[]  @map("core_traits")
+  quirks          String[]
+  fears           String[]
+  desires         String[]
+  values          String[]
+  flaws           String[]
+  
+  strengths       String[]
+  weaknesses      String[]
+  backstory       String?   @db.Text
+  
+  // Voice Profile
+  vocabularyLevel String?   @map("vocabulary_level")
+  speechPatterns  String[]  @map("speech_patterns")
+  catchphrases    String[]
+  dialect         String?
+  formality       String?
+  
+  // Arc
+  arcStart        String?   @map("arc_start")
+  arcCatalyst     String?   @map("arc_catalyst")
+  arcJourney      String[]  @map("arc_journey")
+  arcClimax       String?   @map("arc_climax")
+  arcResolution   String?   @map("arc_resolution")
+  
+  images          String[]
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  secrets         Secret[]
+  relationships   Relationship[] @relation("CharacterRelationships")
+  relatedTo       Relationship[] @relation("RelatedCharacter")
+  povScenes       Scene[]   @relation("ScenePOV")
+  sceneAppearances SceneCharacter[]
+  
+  @@index([projectId])
+  @@index([name])
+  @@map("characters")
+}
+
+model Secret {
+  id              String    @id @default(cuid())
+  characterId     String    @map("character_id")
+  content         String    @db.Text
+  revealChapterId String?   @map("reveal_chapter_id")
+  impactLevel     String    @map("impact_level") // minor, moderate, major
+  knownBy         String[]  @map("known_by_character_ids")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  character       Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  
+  @@index([characterId])
+  @@map("secrets")
+}
+
+model Relationship {
+  id              String    @id @default(cuid())
+  characterId     String    @map("character_id")
+  relatedCharId   String    @map("related_character_id")
+  relationshipType String   @map("relationship_type") // family, romantic, friend, rival, mentor, enemy, ally, neutral
+  description     String?
+  dynamics        String?
+  history         String?   @db.Text
+  tensionPoints   String[]  @map("tension_points")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  character       Character @relation("CharacterRelationships", fields: [characterId], references: [id], onDelete: Cascade)
+  relatedChar     Character @relation("RelatedCharacter", fields: [relatedCharId], references: [id], onDelete: Cascade)
+  
+  @@unique([characterId, relatedCharId])
+  @@index([characterId])
+  @@index([relatedCharId])
+  @@map("relationships")
+}
+
+model Location {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  name            String
+  region          String?
+  description     String?   @db.Text
+  timePeriod      String?   @map("time_period")
+  
+  // Geography
+  terrain         String?
+  climate         String?
+  flora           String[]
+  fauna           String[]
+  resources       String[]
+  hazards         String[]
+  
+  atmosphere      String?
+  significance    String?
+  images          String[]
+  
+  // Map coordinates
+  mapX            Float?    @map("map_x")
+  mapY            Float?    @map("map_y")
+  mapZ            Float?    @map("map_z")
+  mapId           String?   @map("map_id")
+  
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scenes          Scene[]
+  locationCultures LocationCulture[]
+  
+  @@index([projectId])
+  @@index([name])
+  @@map("locations")
+}
+
+model Culture {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  name            String
+  languageId      String?   @map("language_id")
+  economyId       String?   @map("economy_id")
+  norms           String[]
+  rituals         String[]
+  government      String?
+  religion        String?
+  values          String[]
+  taboos          String[]
+  
+  // Social Structure
+  socialClasses   Json?     @map("social_classes") // Array of class objects
+  socialMobility  String?   @map("social_mobility") // rigid, limited, fluid
+  leadership      String?
+  familyStructure String?   @map("family_structure")
+  
+  history         String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  language        Language? @relation(fields: [languageId], references: [id])
+  economy         Economy?  @relation(fields: [economyId], references: [id])
+  locations       LocationCulture[]
+  
+  @@index([projectId])
+  @@index([languageId])
+  @@index([economyId])
+  @@map("cultures")
+}
+
+model LocationCulture {
+  id          String    @id @default(cuid())
+  locationId  String    @map("location_id")
+  cultureId   String    @map("culture_id")
+  
+  location    Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  culture     Culture   @relation(fields: [cultureId], references: [id], onDelete: Cascade)
+  
+  @@unique([locationId, cultureId])
+  @@map("location_cultures")
+}
+
+model Language {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  name            String
+  script          String?
+  phonetics       String?
+  grammarRules    String[]  @map("grammar_rules")
+  commonPhrases   Json[]    @map("common_phrases") // Array of translation objects
+  namingConventions Json?   @map("naming_conventions")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cultures        Culture[]
+  
+  @@index([projectId])
+  @@map("languages")
+}
+
+model Economy {
+  id              String    @id @default(cuid())
+  projectId       String    @map("project_id")
+  name            String
+  type            String    // barter, currency, mixed, gift, command, market
+  currencyName    String?   @map("currency_name")
+  currencySymbol  String?   @map("currency_symbol")
+  denominations   Json[]    // Array of denomination objects
+  majorIndustries String[]  @map("major_industries")
+  tradeRoutes     Json[]    @map("trade_routes") // Array of trade route objects
+  wealthDistribution Json?  @map("wealth_distribution")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cultures        Culture[]
+  
+  @@index([projectId])
+  @@map("economies")
+}
+
+model Timeline {
+  id          String    @id @default(cuid())
+  projectId   String    @map("project_id")
+  name        String
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  events      TimelineEvent[]
+  eras        Era[]
+  
+  @@index([projectId])
+  @@map("timelines")
+}
+
+model TimelineEvent {
+  id              String    @id @default(cuid())
+  timelineId      String    @map("timeline_id")
+  date            String    // Can be precise date or general period
+  title           String
+  description     String    @db.Text
+  impact          String    // minor, moderate, major
+  affectedCharIds String[]  @map("affected_character_ids")
+  affectedLocIds  String[]  @map("affected_location_ids")
+  tags            String[]
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  timeline        Timeline  @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  
+  @@index([timelineId])
+  @@map("timeline_events")
+}
+
+model Era {
+  id              String    @id @default(cuid())
+  timelineId      String    @map("timeline_id")
+  name            String
+  startDate       String    @map("start_date")
+  endDate         String?   @map("end_date")
+  description     String    @db.Text
+  characteristics String[]
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  timeline        Timeline  @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  
+  @@index([timelineId])
+  @@map("eras")
+}
+
+// ==================== STYLE & PREFERENCES ====================
+
+model StyleProfile {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  name            String
+  
+  // Tone settings (1-5 scale)
+  toneFormality   Int       @map("tone_formality")
+  toneHumor       Int       @map("tone_humor")
+  toneDarkness    Int       @map("tone_darkness")
+  toneRomance     Int       @map("tone_romance")
+  toneAction      Int       @map("tone_action")
+  
+  // Pacing
+  overallPace     String    @map("overall_pace") // slow, moderate, fast
+  dialogueDensity String    @map("dialogue_density") // sparse, balanced, heavy
+  descriptionDetail String  @map("description_detail") // minimal, moderate, rich
+  chapterLength   String    @map("chapter_length") // short, medium, long
+  
+  // Vocabulary
+  vocabComplexity String    @map("vocab_complexity") // simple, moderate, complex
+  preferredWords  String[]  @map("preferred_words")
+  avoidedWords    String[]  @map("avoided_words")
+  useProfanity    Boolean   @map("use_profanity")
+  dialectPrefs    String[]  @map("dialect_preferences")
+  
+  tabooList       String[]  @map("taboo_list")
+  inspirationAuthors String[] @map("inspiration_authors")
+  exampleExcerpts String[]  @map("example_excerpts")
+  
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects        Project[]
+  
+  @@index([userId])
+  @@map("style_profiles")
+}
+
+// ==================== BILLING & SUBSCRIPTION ====================
+
+model Subscription {
+  id                  String    @id @default(cuid())
+  userId              String?   @map("user_id")
+  teamId              String?   @map("team_id")
+  plan                String
+  status              String    // active, past_due, canceled, incomplete, trialing, etc.
+  currentPeriodStart  DateTime  @map("current_period_start")
+  currentPeriodEnd    DateTime  @map("current_period_end")
+  cancelAtPeriodEnd   Boolean   @default(false) @map("cancel_at_period_end")
+  canceledAt          DateTime? @map("canceled_at")
+  trialStart          DateTime? @map("trial_start")
+  trialEnd            DateTime? @map("trial_end")
+  stripeSubscriptionId String?  @unique @map("stripe_subscription_id")
+  stripeCustomerId    String    @map("stripe_customer_id")
+  
+  // Metadata
+  seats               Int       @default(1)
+  aiTokensPerMonth    Int       @map("ai_tokens_per_month")
+  storageGb           Int       @map("storage_gb")
+  
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  user                User?     @relation(fields: [userId], references: [id])
+  team                Team?     @relation(fields: [teamId], references: [id])
+  addons              SubscriptionAddon[]
+  invoices            Invoice[]
+  usage               Usage[]
+  
+  @@index([userId])
+  @@index([teamId])
+  @@index([status])
+  @@index([stripeSubscriptionId])
+  @@map("subscriptions")
+}
+
+model SubscriptionAddon {
+  id             String    @id @default(cuid())
+  subscriptionId String    @map("subscription_id")
+  addonSlug      String    @map("addon_slug")
+  name           String
+  priceMonthly   Float     @map("price_monthly")
+  active         Boolean   @default(true)
+  activatedAt    DateTime  @default(now()) @map("activated_at")
+  expiresAt      DateTime? @map("expires_at")
+  
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  @@index([subscriptionId])
+  @@map("subscription_addons")
+}
+
+model Invoice {
+  id                String    @id @default(cuid())
+  subscriptionId    String    @map("subscription_id")
+  stripeInvoiceId   String?   @unique @map("stripe_invoice_id")
+  invoiceNumber     String    @unique @map("invoice_number")
+  status            String    // draft, open, paid, void, uncollectible
+  amountDue         Float     @map("amount_due")
+  amountPaid        Float     @map("amount_paid")
+  currency          String
+  dueDate           DateTime? @map("due_date")
+  paidAt            DateTime? @map("paid_at")
+  periodStart       DateTime  @map("period_start")
+  periodEnd         DateTime  @map("period_end")
+  pdfUrl            String?   @map("pdf_url")
+  hostedInvoiceUrl  String?   @map("hosted_invoice_url")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  
+  subscription      Subscription @relation(fields: [subscriptionId], references: [id])
+  lineItems         LineItem[]
+  
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model LineItem {
+  id          String    @id @default(cuid())
+  invoiceId   String    @map("invoice_id")
+  description String
+  quantity    Int
+  unitAmount  Float     @map("unit_amount")
+  amount      Float
+  currency    String
+  type        String    // subscription, addon, usage, credit, discount
+  
+  invoice     Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  
+  @@index([invoiceId])
+  @@map("line_items")
+}
+
+model Usage {
+  id             String    @id @default(cuid())
+  subscriptionId String    @map("subscription_id")
+  periodStart    DateTime  @map("period_start")
+  periodEnd      DateTime  @map("period_end")
+  
+  // Metrics
+  aiTokensUsed   Int       @map("ai_tokens_used")
+  storageGbUsed  Float     @map("storage_gb_used")
+  apiCallsMade   Int       @map("api_calls_made")
+  exportsGenerated Int     @map("exports_generated")
+  voiceMinutesUsed Float   @map("voice_minutes_used")
+  projectsActive Int       @map("projects_active")
+  wordsWritten   Int       @map("words_written")
+  scenesGenerated Int      @map("scenes_generated")
+  
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  
+  @@index([subscriptionId])
+  @@index([periodStart, periodEnd])
+  @@map("usage")
+}
+
+model UserCredit {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  creditsRemaining Int      @map("credits_remaining")
+  creditsPurchased Int      @map("credits_purchased")
+  expiresAt       DateTime? @map("expires_at")
+  purchaseId      String    @map("purchase_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("user_credits")
+}
+
+model Referral {
+  id             String    @id @default(cuid())
+  referrerId     String    @map("referrer_id")
+  referredEmail  String    @map("referred_email")
+  referredUserId String?   @unique @map("referred_user_id")
+  status         String    // pending, signed_up, converted, expired, canceled
+  rewardType     String    @map("reward_type") // credit, discount, free_month
+  rewardAmount   Float     @map("reward_amount")
+  rewardClaimed  Boolean   @default(false) @map("reward_claimed")
+  signedUpAt     DateTime? @map("signed_up_at")
+  convertedAt    DateTime? @map("converted_at")
+  expiresAt      DateTime? @map("expires_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  
+  referrer       User      @relation("ReferrerUser", fields: [referrerId], references: [id])
+  referredUser   User?     @relation("ReferredUser", fields: [referredUserId], references: [id])
+  
+  @@index([referrerId])
+  @@index([referredEmail])
+  @@index([status])
+  @@map("referrals")
+}
+
+// ==================== AI & GENERATION ====================
+
+model AIGeneration {
+  id             String    @id @default(cuid())
+  userId         String    @map("user_id")
+  projectId      String?   @map("project_id")
+  requestId      String    @unique @map("request_id")
+  persona        String    // muse, editor, coach
+  intent         String
+  content        String    @db.Text
+  alternatives   String[]
+  
+  // Metadata
+  model          String
+  temperature    Float
+  finishReason   String    @map("finish_reason")
+  confidenceScore Float?   @map("confidence_score")
+  contextHash    String    @map("context_hash")
+  processingTimeMs Int     @map("processing_time_ms")
+  
+  // Usage
+  promptTokens   Int       @map("prompt_tokens")
+  completionTokens Int     @map("completion_tokens")
+  totalTokens    Int       @map("total_tokens")
+  estimatedCost  Float     @map("estimated_cost")
+  
+  cached         Boolean   @default(false)
+  safetyFlags    Json?     @map("safety_flags")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  
+  user           User      @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([projectId])
+  @@index([persona])
+  @@index([intent])
+  @@index([contextHash])
+  @@map("ai_generations")
+}
+
+model PromptTemplate {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  persona         String
+  intent          String
+  systemPrompt    String    @db.Text @map("system_prompt")
+  userPromptTemplate String @db.Text @map("user_prompt_template")
+  variables       Json      // Array of variable definitions
+  examples        Json?     // Array of examples
+  version         Int       @default(1)
+  isActive        Boolean   @default(true) @map("is_active")
+  isPublic        Boolean   @default(false) @map("is_public")
+  authorId        String?   @map("author_id")
+  category        String?
+  tags            String[]
+  usageCount      Int       @default(0) @map("usage_count")
+  rating          Float?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  @@index([persona])
+  @@index([intent])
+  @@index([isPublic])
+  @@index([category])
+  @@map("prompt_templates")
+}
+
+model FineTuneJob {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  teamId          String?   @map("team_id")
+  name            String
+  baseModel       String    @map("base_model")
+  trainingDataId  String    @map("training_data_id")
+  validationDataId String?  @map("validation_data_id")
+  hyperparameters Json
+  status          String    // pending, uploading, processing, training, evaluating, completed, failed, canceled
+  progress        Float     @default(0)
+  metrics         Json?
+  modelId         String?   @map("model_id")
+  error           String?
+  estimatedCost   Float     @map("estimated_cost")
+  actualCost      Float?    @map("actual_cost")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  user            User      @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([teamId])
+  @@index([status])
+  @@map("fine_tune_jobs")
+}
+
+// ==================== EXPORT & IMPORT ====================
+
+model ExportJob {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  projectId   String    @map("project_id")
+  format      String    // json, epub, pdf, docx, markdown, html, latex
+  status      String    // queued, processing, completed, failed, canceled, expired
+  progress    Float     @default(0)
+  options     Json
+  fileUrl     String?   @map("file_url")
+  fileSize    Int?      @map("file_size")
+  error       String?
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  user        User      @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([projectId])
+  @@index([status])
+  @@map("export_jobs")
+}
+
+model ImportJob {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  format      String    // json, docx, markdown, scrivener, final_draft, plain_text
+  status      String    // uploading, processing, completed, failed, canceled
+  progress    Float     @default(0)
+  projectId   String?   @map("project_id")
+  statistics  Json?
+  warnings    String[]
+  error       String?
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  user        User      @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([projectId])
+  @@index([status])
+  @@map("import_jobs")
+}
+
+// ==================== MODERATION & SAFETY ====================
+
+model ModerationReport {
+  id          String    @id @default(cuid())
+  reporterId  String    @map("reporter_id")
+  contentType String    @map("content_type")
+  contentId   String    @map("content_id")
+  reason      String
+  description String?
+  status      String    // pending, reviewing, resolved, dismissed
+  resolution  String?
+  moderatorId String?   @map("moderator_id")
+  resolvedAt  DateTime? @map("resolved_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  reporter    User      @relation(fields: [reporterId], references: [id])
+  
+  @@index([status])
+  @@index([contentType, contentId])
+  @@index([reporterId])
+  @@map("moderation_reports")
+}
+
+// ==================== SYSTEM & ANALYTICS ====================
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  teamId      String?   @map("team_id")
+  action      String
+  resourceType String   @map("resource_type")
+  resourceId  String    @map("resource_id")
+  changes     Json?
+  ipAddress   String?   @map("ip_address")
+  userAgent   String?   @map("user_agent")
+  timestamp   DateTime  @default(now())
+  metadata    Json?
+  
+  user        User      @relation(fields: [userId], references: [id])
+  team        Team?     @relation(fields: [teamId], references: [id])
+  
+  @@index([userId])
+  @@index([teamId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  type        String
+  title       String
+  message     String
+  data        Json?
+  read        Boolean   @default(false)
+  readAt      DateTime? @map("read_at")
+  actionUrl   String?   @map("action_url")
+  priority    String    @default("normal") // low, normal, high, urgent
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([read])
+  @@index([type])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model UserAchievement {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  achievementId String  @map("achievement_id")
+  earnedAt    DateTime  @default(now()) @map("earned_at")
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@map("user_achievements")
+}

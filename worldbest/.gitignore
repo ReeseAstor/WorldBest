@@ -1,0 +1,159 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# Production builds
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+.parcel-cache/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.directory
+
+# IDE files
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.iml
+*.ipr
+*.iws
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+postgres_data/
+mongodb_data/
+redis_data/
+
+# Docker
+.docker/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Build artifacts
+*.pid
+*.seed
+*.pid.lock
+.grunt
+.lock-wscript
+lib-cov/
+.npm/
+.eslintcache
+.stylelintcache
+.node_repl_history
+.yarn-integrity
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+pids/
+
+# TypeScript
+*.tsbuildinfo
+.tsc-cache/
+
+# Prisma
+prisma/migrations/dev/
+
+# Storage
+uploads/
+media/
+static/
+public/uploads/
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Package files
+*.tar
+*.tar.gz
+*.zip
+*.7z
+*.rar
+
+# Monitoring
+.nyc_output/
+.grunt/
+.sass-cache/
+
+# Turbo
+.turbo/
+
+# Vercel
+.vercel/
+
+# Sentry
+.sentryclirc
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# MinIO
+minio_data/
+
+# RabbitMQ
+rabbitmq_data/
+
+# Grafana
+grafana_data/
+
+# Prometheus
+prometheus_data/
