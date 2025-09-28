@@ -1,7 +1,2 @@
-// Core Entity Types
-export * from './entities';
-export * from './auth';
-export * from './billing';
+// Temporary narrowed export to avoid duplicate symbol conflicts during service bring-up
 export * from './ai';
-export * from './api';
-export * from './enums';

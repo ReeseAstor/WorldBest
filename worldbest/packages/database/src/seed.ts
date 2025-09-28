@@ -282,7 +282,7 @@ async function createDemoProject(userId: string, styleProfileId: string, teamId?
   }
 
   // Add text versions to scenes
-  const scenes = project.books[0].chapters.flatMap(c => c.scenes);
+  const scenes = project.books[0].chapters.flatMap((c: any) => c.scenes);
   for (const scene of scenes.slice(0, 3)) {
     await prisma.textVersion.create({
       data: {
