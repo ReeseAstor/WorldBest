@@ -30,9 +30,9 @@ export class VectorDBClient {
         throw new Error('PINECONE_API_KEY is not set');
       }
 
-      this.instance = new Pinecone({
-        apiKey,
-      });
+      // Pinecone v1 SDK requires environment
+      const environment = process.env.PINECONE_ENVIRONMENT || process.env.PINECONE_REGION || 'us-east-1-aws';
+      this.instance = new Pinecone({ apiKey, environment } as any);
     }
 
     return this.instance;
@@ -65,8 +65,8 @@ export class VectorDBClient {
       throw new Error(`Failed to generate embedding: ${response.statusText}`);
     }
 
-    const data = await response.json();
-    return data.data[0].embedding;
+    const data: any = await response.json();
+    return (data.data && data.data[0] && data.data[0].embedding) || [];
   }
 
   // Store vector with metadata
@@ -156,7 +156,7 @@ export class VectorDBClient {
     });
 
     return results.matches
-      .filter(match => !options.threshold || match.score >= options.threshold)
+      .filter(match => !options.threshold || (match.score || 0) >= options.threshold)
       .map(match => ({
         id: match.id,
         score: match.score || 0,
@@ -192,7 +192,7 @@ export class VectorDBClient {
 
     return results.matches
       .filter(match => match.id !== id) // Exclude self
-      .filter(match => !options.threshold || match.score >= options.threshold)
+      .filter(match => !options.threshold || (match.score || 0) >= options.threshold)
       .map(match => ({
         id: match.id,
         score: match.score || 0,
