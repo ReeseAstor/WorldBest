@@ -5,6 +5,52 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)
 ![TypeScript](https://img.shields.io/badge/typescript-%3E%3D5.0.0-blue.svg)
+![Status](https://img.shields.io/badge/status-development-yellow.svg)
+
+## 🚀 Quick Start
+
+Get up and running in minutes:
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/worldbest.git
+cd worldbest
+
+# Run the setup script (handles everything)
+./setup.sh
+
+# Start development servers
+make dev
+# or
+pnpm dev
+```
+
+**That's it!** The application will be available at http://localhost:3000
+
+### Alternative Setup
+
+If you prefer manual setup:
+
+```bash
+# 1. Install dependencies
+pnpm install
+
+# 2. Setup environment
+cp .env.example .env
+# Edit .env with your configuration
+
+# 3. Start infrastructure services
+make start-infra
+
+# 4. Run database migrations
+make migrate
+
+# 5. Build packages
+pnpm build
+
+# 6. Start development
+pnpm dev
+```
 
 ## 🎯 Overview
 
@@ -381,12 +427,34 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - The open-source community for amazing tools
 - Our beta testers and early adopters
 
+## 📊 Development Status
+
+### ✅ Completed
+- **Frontend Application** - Complete Next.js web app with authentication, dashboard, and UI components
+- **Authentication Service** - JWT-based auth with session management, 2FA, and security features
+- **Database Schema** - Comprehensive Prisma schema with all entities and relationships
+- **Infrastructure Setup** - Docker Compose, Kubernetes manifests, and deployment configs
+- **Development Environment** - Setup scripts, Makefile, and development tooling
+- **Shared Packages** - TypeScript types, UI components, and utilities
+
+### 🚧 In Progress
+- **Project Management Service** - Story bibles, characters, and worldbuilding APIs
+
+### 📋 Planned
+- **AI Orchestrator Service** - Three personas (Muse, Editor, Coach) with generation capabilities
+- **Export Service** - ePub, PDF, and other format generation
+- **Billing Service** - Stripe integration and subscription management
+- **Real-time Features** - WebSocket implementation for collaboration
+- **Advanced UI Components** - Rich text editor, drag-and-drop interfaces
+
 ## 🚀 Roadmap
 
 ### Q1 2024
 - [x] Core platform MVP
-- [x] Basic AI integration
 - [x] Authentication system
+- [x] Database architecture
+- [x] Development environment
+- [ ] Basic AI integration
 - [ ] Payment processing
 
 ### Q2 2024
