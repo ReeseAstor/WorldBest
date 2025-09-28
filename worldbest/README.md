@@ -343,6 +343,10 @@ Content-Type: application/json
 
 Full API documentation available at: http://localhost/api/docs
 
+## 🧭 Deep Dive Docs
+
+- Technical Deep Dive: docs/deep-dive/index.md
+
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
