@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: worldbest
+  labels:
+    name: worldbest
+    environment: production
