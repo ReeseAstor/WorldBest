@@ -1,436 +1,354 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { faker } from '@faker-js/faker';
 
 const prisma = new PrismaClient();
 
-async function seed() {
+async function main() {
   console.log('🌱 Starting database seed...');
 
-  try {
-    // Clean existing data
-    await prisma.$transaction([
-      prisma.notification.deleteMany(),
-      prisma.auditLog.deleteMany(),
-      prisma.moderationReport.deleteMany(),
-      prisma.importJob.deleteMany(),
-      prisma.exportJob.deleteMany(),
-      prisma.fineTuneJob.deleteMany(),
-      prisma.promptTemplate.deleteMany(),
-      prisma.aIGeneration.deleteMany(),
-      prisma.referral.deleteMany(),
-      prisma.userCredit.deleteMany(),
-      prisma.usage.deleteMany(),
-      prisma.lineItem.deleteMany(),
-      prisma.invoice.deleteMany(),
-      prisma.subscriptionAddon.deleteMany(),
-      prisma.subscription.deleteMany(),
-      prisma.styleProfile.deleteMany(),
-      prisma.era.deleteMany(),
-      prisma.timelineEvent.deleteMany(),
-      prisma.timeline.deleteMany(),
-      prisma.economy.deleteMany(),
-      prisma.language.deleteMany(),
-      prisma.locationCulture.deleteMany(),
-      prisma.culture.deleteMany(),
-      prisma.location.deleteMany(),
-      prisma.relationship.deleteMany(),
-      prisma.secret.deleteMany(),
-      prisma.character.deleteMany(),
-      prisma.placeholder.deleteMany(),
-      prisma.textVersion.deleteMany(),
-      prisma.sceneCharacter.deleteMany(),
-      prisma.scene.deleteMany(),
-      prisma.chapter.deleteMany(),
-      prisma.book.deleteMany(),
-      prisma.projectCollaborator.deleteMany(),
-      prisma.project.deleteMany(),
-      prisma.teamMember.deleteMany(),
-      prisma.team.deleteMany(),
-      prisma.apiKey.deleteMany(),
-      prisma.session.deleteMany(),
-      prisma.userAchievement.deleteMany(),
-      prisma.user.deleteMany(),
-    ]);
+  // Clean existing data
+  await prisma.auditLog.deleteMany();
+  await prisma.projectCollaborator.deleteMany();
+  await prisma.project.deleteMany();
+  await prisma.teamMember.deleteMany();
+  await prisma.team.deleteMany();
+  await prisma.apiKey.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.user.deleteMany();
 
-    console.log('✅ Cleaned existing data');
+  console.log('✨ Cleaned existing data');
 
-    // Create demo users
-    const users = await Promise.all([
-      createUser('demo@worldbest.ai', 'Demo User', 'demo123', 'story_starter'),
-      createUser('author@worldbest.ai', 'Jane Author', 'author123', 'solo_author'),
-      createUser('pro@worldbest.ai', 'Pro Creator', 'pro123', 'pro_creator'),
-      createUser('team@worldbest.ai', 'Team Lead', 'team123', 'studio_team'),
-    ]);
+  // Create demo users
+  const hashedPassword = await bcrypt.hash('Demo123!@#', 12);
 
-    console.log('✅ Created demo users');
-
-    // Create a demo team
-    const team = await prisma.team.create({
-      data: {
-        name: 'Story Studios',
-        slug: 'story-studios',
-        description: 'A creative writing team',
-        ownerId: users[3].id,
-        plan: 'studio_team',
-        billingEmail: 'billing@storystudios.com',
-        seatsLimit: 5,
-        seatsUsed: 2,
-        members: {
-          create: [
-            {
-              userId: users[3].id,
-              role: 'owner',
-              permissions: ['all'],
-              status: 'active',
-              invitedBy: users[3].id,
-              joinedAt: new Date(),
-            },
-            {
-              userId: users[2].id,
-              role: 'editor',
-              permissions: ['read', 'write', 'comment'],
-              status: 'active',
-              invitedBy: users[3].id,
-              joinedAt: new Date(),
-            },
-          ],
-        },
-      },
-    });
-
-    console.log('✅ Created demo team');
-
-    // Create style profiles
-    const styleProfiles = await Promise.all([
-      prisma.styleProfile.create({
-        data: {
-          userId: users[1].id,
-          name: 'Contemporary Fiction',
-          toneFormality: 3,
-          toneHumor: 2,
-          toneDarkness: 2,
-          toneRomance: 3,
-          toneAction: 2,
-          overallPace: 'moderate',
-          dialogueDensity: 'balanced',
-          descriptionDetail: 'moderate',
-          chapterLength: 'medium',
-          vocabComplexity: 'moderate',
-          preferredWords: ['vivid', 'compelling', 'nuanced'],
-          avoidedWords: ['very', 'really', 'just'],
-          useProfanity: false,
-          dialectPrefs: ['standard'],
-          tabooList: [],
-          inspirationAuthors: ['Margaret Atwood', 'Kazuo Ishiguro'],
-          exampleExcerpts: [],
-        },
-      }),
-      prisma.styleProfile.create({
-        data: {
-          userId: users[2].id,
-          name: 'Epic Fantasy',
-          toneFormality: 4,
-          toneHumor: 1,
-          toneDarkness: 3,
-          toneRomance: 2,
-          toneAction: 5,
-          overallPace: 'fast',
-          dialogueDensity: 'sparse',
-          descriptionDetail: 'rich',
-          chapterLength: 'long',
-          vocabComplexity: 'complex',
-          preferredWords: ['ancient', 'mystical', 'formidable'],
-          avoidedWords: ['okay', 'awesome', 'cool'],
-          useProfanity: false,
-          dialectPrefs: ['archaic', 'formal'],
-          tabooList: [],
-          inspirationAuthors: ['Brandon Sanderson', 'Patrick Rothfuss'],
-          exampleExcerpts: [],
-        },
-      }),
-    ]);
-
-    console.log('✅ Created style profiles');
-
-    // Create demo projects
-    for (const user of users.slice(1)) {
-      const project = await createDemoProject(user.id, styleProfiles[0].id);
-      console.log(`✅ Created demo project for ${user.email}`);
-    }
-
-    // Create team project
-    const teamProject = await createDemoProject(users[3].id, styleProfiles[1].id, team.id);
-    console.log('✅ Created team project');
-
-    // Create subscriptions
-    for (const user of users) {
-      await createSubscription(user.id, user.plan as string);
-    }
-
-    console.log('✅ Created subscriptions');
-
-    // Create prompt templates
-    await createPromptTemplates();
-    console.log('✅ Created prompt templates');
-
-    console.log('🎉 Database seed completed successfully!');
-  } catch (error) {
-    console.error('❌ Seed error:', error);
-    throw error;
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
-async function createUser(email: string, displayName: string, password: string, plan: string) {
-  const hashedPassword = await bcrypt.hash(password, 10);
-  
-  return prisma.user.create({
+  const demoUser = await prisma.user.create({
     data: {
-      email,
-      username: email.split('@')[0],
-      displayName,
-      passwordHash: hashedPassword,
-      emailVerified: true,
+      email: 'demo@worldbest.ai',
+      displayName: 'Demo User',
+      username: 'demouser',
+      password: hashedPassword,
+      role: 'user',
+      isEmailVerified: true,
       emailVerifiedAt: new Date(),
-      plan,
-      billingCustomerId: `cus_${faker.string.alphanumeric(14)}`,
+      plan: 'pro_creator',
     },
   });
-}
 
-async function createDemoProject(userId: string, styleProfileId: string, teamId?: string) {
-  const genres = ['Fantasy', 'Science Fiction', 'Mystery', 'Romance', 'Thriller'];
-  const genre = faker.helpers.arrayElement(genres);
-
-  const project = await prisma.project.create({
+  const adminUser = await prisma.user.create({
     data: {
-      ownerId: userId,
-      teamId,
-      title: faker.company.catchPhrase(),
-      synopsis: faker.lorem.paragraph(3),
-      genre,
-      styleProfileId,
-      defaultLanguage: 'en-US',
-      contentRating: 'PG-13',
-      draftModel: 'gpt-4',
-      polishModel: 'gpt-4',
-      books: {
+      email: 'admin@worldbest.ai',
+      displayName: 'Admin User',
+      username: 'admin',
+      password: hashedPassword,
+      role: 'admin',
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
+      plan: 'enterprise',
+    },
+  });
+
+  const collaboratorUser = await prisma.user.create({
+    data: {
+      email: 'collaborator@worldbest.ai',
+      displayName: 'Collaborator User',
+      username: 'collaborator',
+      password: hashedPassword,
+      role: 'user',
+      isEmailVerified: true,
+      emailVerifiedAt: new Date(),
+      plan: 'solo_author',
+    },
+  });
+
+  console.log('👥 Created demo users');
+
+  // Create a team
+  const team = await prisma.team.create({
+    data: {
+      name: 'Demo Writers Studio',
+      slug: 'demo-writers-studio',
+      description: 'A collaborative writing studio for demonstration',
+      ownerId: adminUser.id,
+      plan: 'studio_team',
+      billingEmail: 'billing@worldbest.ai',
+      seatsLimit: 5,
+      seatsUsed: 2,
+      members: {
         create: [
           {
-            title: 'Book One: ' + faker.company.catchPhrase(),
-            order: 1,
-            blurb: faker.lorem.paragraph(2),
-            targetWordCount: 80000,
-            status: 'drafting',
-            chapters: {
-              create: Array.from({ length: 5 }, (_, i) => ({
-                number: i + 1,
-                title: `Chapter ${i + 1}: ${faker.company.catchPhrase()}`,
-                summary: faker.lorem.paragraph(),
-                targetWordCount: 3000,
-                status: i === 0 ? 'complete' : 'outlined',
-                scenes: {
-                  create: Array.from({ length: 3 }, (_, j) => ({
-                    title: faker.company.catchPhrase(),
-                    mood: faker.helpers.arrayElement(['tense', 'romantic', 'mysterious', 'action-packed']),
-                    conflict: faker.lorem.sentence(),
-                    resolution: j === 2 ? faker.lorem.sentence() : null,
-                  })),
-                },
-              })),
-            },
+            userId: adminUser.id,
+            role: 'admin',
+            permissions: ['all'],
+            status: 'active',
+            invitedBy: adminUser.id,
+            joinedAt: new Date(),
+          },
+          {
+            userId: demoUser.id,
+            role: 'editor',
+            permissions: ['read', 'write', 'comment'],
+            status: 'active',
+            invitedBy: adminUser.id,
+            joinedAt: new Date(),
           },
         ],
       },
-      characters: {
-        create: Array.from({ length: 5 }, () => createCharacterData()),
-      },
-      locations: {
-        create: Array.from({ length: 3 }, () => createLocationData()),
-      },
     },
-    include: {
-      books: {
-        include: {
-          chapters: {
-            include: {
-              scenes: true,
-            },
-          },
+  });
+
+  console.log('👥 Created demo team');
+
+  // Create sample projects
+  const fantasyProject = await prisma.project.create({
+    data: {
+      title: 'The Chronicles of Aetheria',
+      synopsis: 'An epic fantasy saga following the journey of unlikely heroes as they navigate political intrigue, ancient magic, and world-ending threats in the realm of Aetheria.',
+      genre: 'fantasy',
+      ownerId: demoUser.id,
+      teamId: team.id,
+      targetAudience: 'young-adult',
+      contentRating: 'PG-13',
+      visibility: 'team',
+      collaborators: {
+        create: {
+          userId: collaboratorUser.id,
+          role: 'editor',
+          permissions: ['read', 'write', 'comment'],
         },
       },
-      characters: true,
-      locations: true,
     },
   });
 
-  // Add relationships between characters
-  const characters = project.characters;
-  if (characters.length >= 2) {
-    await prisma.relationship.create({
-      data: {
-        characterId: characters[0].id,
-        relatedCharId: characters[1].id,
-        relationshipType: 'friend',
-        description: 'Childhood friends who grew up together',
-        dynamics: 'Supportive but sometimes competitive',
-        tensionPoints: ['Different life goals', 'Past romantic interest'],
-      },
-    });
-  }
-
-  // Add text versions to scenes
-  const scenes = project.books[0].chapters.flatMap(c => c.scenes);
-  for (const scene of scenes.slice(0, 3)) {
-    await prisma.textVersion.create({
-      data: {
-        sceneId: scene.id,
-        authorId: userId,
-        content: faker.lorem.paragraphs(5, '\n\n'),
-        summary: faker.lorem.paragraph(),
-        semanticHash: faker.string.alphanumeric(32),
-        wordCount: faker.number.int({ min: 500, max: 2000 }),
-        aiGenerated: false,
-      },
-    });
-  }
-
-  return project;
-}
-
-function createCharacterData() {
-  return {
-    name: faker.person.fullName(),
-    aliases: [faker.person.firstName()],
-    age: faker.number.int({ min: 18, max: 65 }),
-    gender: faker.helpers.arrayElement(['male', 'female', 'non-binary']),
-    mbti: faker.helpers.arrayElement(['INTJ', 'ENFP', 'ISTP', 'ESFJ', 'INFJ', 'ENTP']),
-    height: faker.helpers.arrayElement(['tall', 'average', 'short']),
-    build: faker.helpers.arrayElement(['athletic', 'slim', 'stocky', 'average']),
-    hair: faker.color.human() + ' hair',
-    eyes: faker.color.human() + ' eyes',
-    distinguishingFeatures: [faker.lorem.words(3)],
-    coreTraits: Array.from({ length: 3 }, () => faker.person.zodiacSign()),
-    quirks: [faker.lorem.words(2)],
-    fears: [faker.lorem.words(3)],
-    desires: [faker.lorem.words(3)],
-    values: [faker.lorem.words(2)],
-    flaws: [faker.lorem.words(2)],
-    strengths: [faker.lorem.words(2)],
-    weaknesses: [faker.lorem.words(2)],
-    backstory: faker.lorem.paragraph(3),
-    vocabularyLevel: 'moderate',
-    speechPatterns: [faker.lorem.words(3)],
-    catchphrases: [faker.company.catchPhrase()],
-    formality: 'neutral',
-  };
-}
-
-function createLocationData() {
-  return {
-    name: faker.location.city(),
-    region: faker.location.state(),
-    description: faker.lorem.paragraph(2),
-    terrain: faker.helpers.arrayElement(['mountains', 'plains', 'forest', 'desert', 'coastal']),
-    climate: faker.helpers.arrayElement(['temperate', 'tropical', 'arctic', 'desert', 'mediterranean']),
-    flora: Array.from({ length: 3 }, () => faker.lorem.word()),
-    fauna: Array.from({ length: 3 }, () => faker.animal.type()),
-    resources: Array.from({ length: 2 }, () => faker.commerce.productMaterial()),
-    hazards: [faker.lorem.words(2)],
-    atmosphere: faker.lorem.sentence(),
-    significance: faker.lorem.sentence(),
-  };
-}
-
-async function createSubscription(userId: string, plan: string) {
-  const now = new Date();
-  const periodEnd = new Date(now);
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-  const tokenLimits: Record<string, number> = {
-    story_starter: 10000,
-    solo_author: 50000,
-    pro_creator: 200000,
-    studio_team: 500000,
-    enterprise: 2000000,
-  };
-
-  return prisma.subscription.create({
+  const sciFiProject = await prisma.project.create({
     data: {
-      userId,
-      plan,
-      status: 'active',
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      stripeCustomerId: `cus_${faker.string.alphanumeric(14)}`,
-      stripeSubscriptionId: `sub_${faker.string.alphanumeric(14)}`,
-      seats: plan === 'studio_team' ? 5 : 1,
-      aiTokensPerMonth: tokenLimits[plan] || 10000,
-      storageGb: plan === 'enterprise' ? 1000 : plan === 'studio_team' ? 100 : 10,
+      title: 'Quantum Paradox',
+      synopsis: 'A hard science fiction thriller exploring the consequences of time travel and parallel universes when a physicist discovers a way to communicate with alternate versions of herself.',
+      genre: 'sci-fi',
+      ownerId: demoUser.id,
+      targetAudience: 'adult',
+      contentRating: 'R',
+      visibility: 'private',
+      draftModel: 'gpt-4',
+      polishModel: 'claude-3',
+      temperatureDraft: 0.8,
+      temperaturePolish: 0.4,
     },
   });
+
+  const mysteryProject = await prisma.project.create({
+    data: {
+      title: 'The Lighthouse Keeper\'s Secret',
+      synopsis: 'A psychological mystery set in a remote coastal town where a detective investigates a series of disappearances linked to an abandoned lighthouse with a dark history.',
+      genre: 'mystery',
+      ownerId: collaboratorUser.id,
+      targetAudience: 'adult',
+      contentRating: 'PG-13',
+      visibility: 'private',
+    },
+  });
+
+  console.log('📚 Created sample projects');
+
+  // Create books for the fantasy project
+  const book1 = await prisma.book.create({
+    data: {
+      projectId: fantasyProject.id,
+      title: 'The Awakening',
+      order: 1,
+      blurb: 'The prophecy begins to unfold as ancient powers stir in the forgotten corners of Aetheria.',
+      targetWordCount: 90000,
+      status: 'drafting',
+    },
+  });
+
+  const book2 = await prisma.book.create({
+    data: {
+      projectId: fantasyProject.id,
+      title: 'The Gathering Storm',
+      order: 2,
+      blurb: 'Alliances form and betrayals emerge as the true enemy reveals itself.',
+      targetWordCount: 95000,
+      status: 'planning',
+    },
+  });
+
+  console.log('📖 Created sample books');
+
+  // Create chapters for book 1
+  const chapter1 = await prisma.chapter.create({
+    data: {
+      bookId: book1.id,
+      number: 1,
+      title: 'The Stranger\'s Arrival',
+      summary: 'A mysterious traveler arrives in the village of Millhaven, bringing news of dark omens from the capital.',
+      targetWordCount: 4500,
+      status: 'completed',
+    },
+  });
+
+  const chapter2 = await prisma.chapter.create({
+    data: {
+      bookId: book1.id,
+      number: 2,
+      title: 'Whispers in the Dark',
+      summary: 'Strange dreams plague the villagers as an ancient artifact is discovered in the old ruins.',
+      targetWordCount: 5000,
+      status: 'drafting',
+    },
+  });
+
+  console.log('📄 Created sample chapters');
+
+  // Create characters for the fantasy project
+  const mainCharacter = await prisma.character.create({
+    data: {
+      projectId: fantasyProject.id,
+      name: 'Lyra Starweaver',
+      aliases: ['The Chosen One', 'Heir of Light'],
+      age: 19,
+      gender: 'female',
+      mbti: 'INFJ',
+      coreTraits: ['brave', 'compassionate', 'determined'],
+      fears: ['losing loved ones', 'failing her destiny'],
+      desires: ['peace for the realm', 'understanding her powers'],
+      backstory: 'Raised as an orphan in a small village, Lyra discovers on her 19th birthday that she is the last descendant of an ancient line of mage-warriors destined to protect Aetheria from the returning darkness.',
+    },
+  });
+
+  const mentor = await prisma.character.create({
+    data: {
+      projectId: fantasyProject.id,
+      name: 'Master Aldric Greystone',
+      age: 67,
+      gender: 'male',
+      mbti: 'INTJ',
+      coreTraits: ['wise', 'secretive', 'protective'],
+      fears: ['the prophecy failing', 'his past catching up'],
+      desires: ['redemption', 'to see Lyra succeed'],
+      backstory: 'Former high mage of the royal court, now living in exile after a catastrophic failure twenty years ago. He recognizes Lyra\'s potential and becomes her reluctant mentor.',
+    },
+  });
+
+  console.log('👤 Created sample characters');
+
+  // Create locations
+  const location1 = await prisma.location.create({
+    data: {
+      projectId: fantasyProject.id,
+      name: 'Millhaven Village',
+      region: 'Western Lowlands',
+      description: 'A peaceful farming village nestled between rolling hills and ancient forests. Known for its weekly markets and the mysterious Stone Circle on the nearby hilltop.',
+      terrain: 'grassland',
+      climate: 'temperate',
+      significance: 'Starting point of the hero\'s journey',
+    },
+  });
+
+  const location2 = await prisma.location.create({
+    data: {
+      projectId: fantasyProject.id,
+      name: 'The Sunspire Citadel',
+      region: 'Central Mountains',
+      description: 'The ancient seat of power for the kingdom, built into a mountain peak that seems to touch the sky. Its towers are said to channel pure sunlight into magical energy.',
+      terrain: 'mountainous',
+      climate: 'alpine',
+      significance: 'Center of magical learning and political power',
+    },
+  });
+
+  console.log('🗺️ Created sample locations');
+
+  // Create a culture
+  const culture = await prisma.culture.create({
+    data: {
+      projectId: fantasyProject.id,
+      name: 'Aetherians',
+      norms: ['hospitality to strangers', 'respect for elders', 'magical aptitude testing at age 16'],
+      rituals: ['Harvest Moon Festival', 'Coming of Age Ceremony', 'Remembrance of the Fallen'],
+      government: 'Constitutional Monarchy with a Council of Mages',
+      religion: 'Worship of the Seven Celestial Aspects',
+      values: ['honor', 'knowledge', 'balance between magic and nature'],
+      taboos: ['blood magic', 'necromancy', 'breaking guest rights'],
+    },
+  });
+
+  console.log('🏛️ Created sample culture');
+
+  // Create a timeline
+  const timeline = await prisma.timeline.create({
+    data: {
+      projectId: fantasyProject.id,
+      name: 'History of Aetheria',
+      events: {
+        create: [
+          {
+            date: 'Year 0 - The Founding',
+            title: 'The First Kingdom',
+            description: 'The seven tribes unite under the first High King, establishing the Kingdom of Aetheria.',
+            impact: 'major',
+            tags: ['founding', 'political', 'historical'],
+          },
+          {
+            date: 'Year 847 - The Great War',
+            title: 'The Shadow Invasion',
+            description: 'Dark forces from beyond the Veil invade Aetheria, leading to a century of conflict.',
+            impact: 'major',
+            tags: ['war', 'magic', 'darkness'],
+          },
+          {
+            date: 'Year 1205 - Present Day',
+            title: 'The New Prophecy',
+            description: 'Signs indicate the return of the Shadow, and a new chosen one must rise.',
+            impact: 'major',
+            tags: ['prophecy', 'current', 'plot'],
+          },
+        ],
+      },
+    },
+  });
+
+  console.log('⏰ Created sample timeline');
+
+  // Create audit logs
+  await prisma.auditLog.createMany({
+    data: [
+      {
+        userId: demoUser.id,
+        action: 'project.create',
+        resourceType: 'project',
+        resourceId: fantasyProject.id,
+        metadata: { title: 'The Chronicles of Aetheria' },
+      },
+      {
+        userId: demoUser.id,
+        action: 'character.create',
+        resourceType: 'character',
+        resourceId: mainCharacter.id,
+        metadata: { name: 'Lyra Starweaver' },
+      },
+      {
+        userId: adminUser.id,
+        action: 'team.create',
+        resourceType: 'team',
+        resourceId: team.id,
+        metadata: { name: 'Demo Writers Studio' },
+      },
+    ],
+  });
+
+  console.log('📝 Created audit logs');
+
+  console.log('✅ Seed completed successfully!');
+  console.log('\n🔑 Demo credentials:');
+  console.log('   Email: demo@worldbest.ai');
+  console.log('   Password: Demo123!@#');
+  console.log('\n   Admin Email: admin@worldbest.ai');
+  console.log('   Admin Password: Demo123!@#');
 }
 
-async function createPromptTemplates() {
-  const templates = [
-    {
-      name: 'Scene Expansion',
-      description: 'Expand a brief scene outline into a full narrative',
-      persona: 'muse',
-      intent: 'generate_scene',
-      systemPrompt: 'You are a creative writing assistant specializing in scene development.',
-      userPromptTemplate: 'Expand this scene outline into a detailed narrative:\n\n{{outline}}\n\nInclude: {{requirements}}',
-      variables: JSON.stringify([
-        { name: 'outline', type: 'string', required: true },
-        { name: 'requirements', type: 'string', required: false },
-      ]),
-      isPublic: true,
-      category: 'scene',
-      tags: ['scene', 'expansion', 'narrative'],
-    },
-    {
-      name: 'Character Voice',
-      description: 'Generate dialogue in a specific character voice',
-      persona: 'muse',
-      intent: 'create_dialogue',
-      systemPrompt: 'You are an expert at creating authentic character dialogue.',
-      userPromptTemplate: 'Write dialogue for {{character}} in this situation:\n\n{{situation}}',
-      variables: JSON.stringify([
-        { name: 'character', type: 'string', required: true },
-        { name: 'situation', type: 'string', required: true },
-      ]),
-      isPublic: true,
-      category: 'dialogue',
-      tags: ['dialogue', 'character', 'voice'],
-    },
-    {
-      name: 'Plot Beat Analysis',
-      description: 'Analyze story structure and suggest improvements',
-      persona: 'coach',
-      intent: 'analyze',
-      systemPrompt: 'You are a story structure expert who helps writers improve their plots.',
-      userPromptTemplate: 'Analyze the plot structure of:\n\n{{plot_summary}}\n\nFocus on: {{focus_areas}}',
-      variables: JSON.stringify([
-        { name: 'plot_summary', type: 'string', required: true },
-        { name: 'focus_areas', type: 'string', required: false },
-      ]),
-      isPublic: true,
-      category: 'analysis',
-      tags: ['plot', 'structure', 'analysis'],
-    },
-  ];
-
-  for (const template of templates) {
-    await prisma.promptTemplate.create({ data: template });
-  }
-}
-
-// Run the seed
-seed()
-  .catch((error) => {
-    console.error(error);
+main()
+  .catch((e) => {
+    console.error('❌ Seed failed:', e);
     process.exit(1);
   })
   .finally(async () => {
