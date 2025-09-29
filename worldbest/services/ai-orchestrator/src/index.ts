@@ -3,11 +3,16 @@ import cors from '@fastify/cors';
 import { z } from 'zod';
 import { PrismaClient, MongoDBClient } from '@worldbest/database';
 import { AIIntent, AIPersona } from '@worldbest/shared-types';
+import { AIService } from './services/ai-service';
+import { logger } from './utils/logger';
 
 const app = Fastify({ logger: true });
 app.register(cors, { origin: true });
 
 const port = parseInt(process.env.PORT || '3003', 10);
+
+// Initialize services
+const aiService = new AIService();
 
 const GenerationSchema = z.object({
   intent: z.nativeEnum(AIIntent),
@@ -42,92 +47,138 @@ app.post('/api/v1/ai/generate', async (
   request: FastifyRequest<{ Body: unknown }>,
   reply: FastifyReply
 ) => {
-  const parseResult = GenerationSchema.safeParse(request.body);
-  if (!parseResult.success) {
-    reply.code(400);
-    return { success: false, error: { code: 'VAL_002', message: 'Invalid request', details: parseResult.error.flatten(), timestamp: new Date() } };
-  }
+  try {
+    const parseResult = GenerationSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      reply.code(400);
+      return { 
+        success: false, 
+        error: { 
+          code: 'VAL_002', 
+          message: 'Invalid request', 
+          details: parseResult.error.flatten(), 
+          timestamp: new Date() 
+        } 
+      };
+    }
 
-  const body: GenerationBody = parseResult.data;
+    const body: GenerationBody = parseResult.data;
 
-  const prismaClient = PrismaClient.getInstance();
-  await PrismaClient.connect();
-  await MongoDBClient.connect();
+    // Initialize database connections
+    const prismaClient = PrismaClient.getInstance();
+    await PrismaClient.connect();
+    await MongoDBClient.connect();
 
-  const startTime = Date.now();
-
-  // Stubbed generation result
-  const content = `Stub response for intent ${body.intent} by persona ${body.persona}.`;
-  const alternatives: string[] = [];
-  const model = body.params.model_override || 'gpt-4o-mini';
-  const temperature = body.params.temperature ?? 0.7;
-
-  // Persist AIGeneration log to Postgres
-  const generation = await prismaClient.aIGeneration.create({
-    data: {
-      userId: 'user_demo',
-      projectId: body.projectId,
-      requestId: body.idempotency_key || `req_${Date.now()}`,
-      persona: body.persona,
+    // Generate content using AI service
+    const result = await aiService.generateContent({
       intent: body.intent,
-      content,
-      alternatives,
-      model,
-      temperature,
-      finishReason: 'stop',
-      contextHash: 'context_stub',
-      processingTimeMs: Date.now() - startTime,
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
-      estimatedCost: 0,
-      cached: false,
-    },
-  });
-
-  // Cache minimal context in Mongo if provided
-  if (body.contextRefs.length > 0) {
-    await MongoDBClient.cacheAIContext({
+      persona: body.persona,
       projectId: body.projectId,
-      contextType: 'project',
-      contextId: body.projectId,
-      contextHash: 'context_stub',
-      summary: 'stub summary',
-      keyPoints: [],
-      entities: { characters: [], locations: [], events: [] },
-      metadata: { refs: body.contextRefs },
-      ttl: 3600,
+      contextRefs: body.contextRefs,
+      params: body.params,
+      safety_overrides: body.safety_overrides,
+      idempotency_key: body.idempotency_key,
     });
-  }
 
-  return {
-    success: true,
-    data: {
-      id: generation.id,
-      request_id: generation.requestId,
-      persona: generation.persona,
-      intent: generation.intent,
-      content: generation.content,
-      alternatives: generation.alternatives,
-      metadata: {
-        model: generation.model,
-        temperature: generation.temperature,
-        finish_reason: generation.finishReason as any,
-        context_version: 'v1',
-        context_hash: generation.contextHash,
-        processing_time_ms: generation.processingTimeMs,
+    logger.info('AI generation completed', {
+      requestId: result.request_id,
+      persona: result.persona,
+      intent: result.intent,
+      tokens: result.usage.total_tokens,
+      cost: result.usage.estimated_cost,
+      cached: result.cached,
+    });
+
+    return {
+      success: true,
+      data: result,
+    };
+  } catch (error) {
+    logger.error('AI generation failed:', error);
+    reply.code(500);
+    return {
+      success: false,
+      error: {
+        code: 'AI_001',
+        message: 'AI generation failed',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date(),
       },
-      usage: {
-        prompt_tokens: generation.promptTokens,
-        completion_tokens: generation.completionTokens,
-        total_tokens: generation.totalTokens,
-        estimated_cost: generation.estimatedCost,
-        model_tier: 'draft',
+    };
+  }
+});
+
+// Additional AI endpoints
+app.post('/api/v1/ai/analyze', async (
+  request: FastifyRequest<{ Body: { text: string; analysisType: string } }>,
+  reply: FastifyReply
+) => {
+  try {
+    const { text, analysisType } = request.body;
+    
+    // Mock analysis - in real implementation, this would use AI
+    const analysis = {
+      sentiment: 'positive',
+      readability: 'intermediate',
+      suggestions: ['Consider adding more dialogue', 'The pacing could be improved'],
+      wordCount: text.split(' ').length,
+      characterCount: text.length,
+    };
+
+    return {
+      success: true,
+      data: analysis,
+    };
+  } catch (error) {
+    logger.error('AI analysis failed:', error);
+    reply.code(500);
+    return {
+      success: false,
+      error: {
+        code: 'AI_002',
+        message: 'AI analysis failed',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date(),
       },
-      cached: generation.cached,
-      created_at: generation.createdAt,
-    },
-  };
+    };
+  }
+});
+
+app.post('/api/v1/ai/suggest', async (
+  request: FastifyRequest<{ Body: { context: any; suggestionType: string } }>,
+  reply: FastifyReply
+) => {
+  try {
+    const { context, suggestionType } = request.body;
+    
+    // Mock suggestions - in real implementation, this would use AI
+    const suggestions = {
+      plot: ['Add a plot twist', 'Introduce a new character', 'Create a conflict'],
+      character: ['Develop the backstory', 'Add a flaw', 'Create a relationship'],
+      dialogue: ['Make it more natural', 'Add subtext', 'Vary the speech patterns'],
+      description: ['Add sensory details', 'Show don\'t tell', 'Use metaphors'],
+    };
+
+    return {
+      success: true,
+      data: {
+        suggestions: suggestions[suggestionType] || [],
+        confidence: 0.8,
+      },
+    };
+  } catch (error) {
+    logger.error('AI suggestions failed:', error);
+    reply.code(500);
+    return {
+      success: false,
+      error: {
+        code: 'AI_003',
+        message: 'AI suggestions failed',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date(),
+      },
+    };
+  }
 });
 
 app.listen({ port, host: '0.0.0.0' })
