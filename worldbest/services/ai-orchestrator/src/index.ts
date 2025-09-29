@@ -3,11 +3,14 @@ import cors from '@fastify/cors';
 import { z } from 'zod';
 import { PrismaClient, MongoDBClient } from '@worldbest/database';
 import { AIIntent, AIPersona } from '@worldbest/shared-types';
+import { AIOrchestrator } from './services/orchestrator';
+import { config } from './config';
 
 const app = Fastify({ logger: true });
 app.register(cors, { origin: true });
 
-const port = parseInt(process.env.PORT || '3003', 10);
+const port = config.port;
+const orchestrator = new AIOrchestrator();
 
 const GenerationSchema = z.object({
   intent: z.nativeEnum(AIIntent),
@@ -36,98 +39,75 @@ const GenerationSchema = z.object({
 });
 type GenerationBody = z.infer<typeof GenerationSchema>;
 
-app.get('/health', async () => ({ status: 'ok' }));
+// Health check endpoint
+app.get('/health', async () => ({ 
+  status: 'ok',
+  service: 'ai-orchestrator',
+  version: '1.0.0',
+  timestamp: new Date().toISOString(),
+}));
 
+// Main AI generation endpoint
 app.post('/api/v1/ai/generate', async (
-  request: FastifyRequest<{ Body: unknown }>,
+  request: FastifyRequest<{ Body: unknown; Headers: { authorization?: string } }>,
   reply: FastifyReply
 ) => {
   const parseResult = GenerationSchema.safeParse(request.body);
   if (!parseResult.success) {
     reply.code(400);
-    return { success: false, error: { code: 'VAL_002', message: 'Invalid request', details: parseResult.error.flatten(), timestamp: new Date() } };
+    return { 
+      success: false, 
+      error: { 
+        code: 'VAL_002', 
+        message: 'Invalid request', 
+        details: parseResult.error.flatten(), 
+        timestamp: new Date() 
+      } 
+    };
   }
 
   const body: GenerationBody = parseResult.data;
 
-  const prismaClient = PrismaClient.getInstance();
-  await PrismaClient.connect();
-  await MongoDBClient.connect();
+  // Extract user ID from authorization header (simplified for demo)
+  // In production, this should use proper JWT verification
+  const authHeader = request.headers.authorization;
+  const userId = authHeader ? 'user_from_token' : 'user_demo';
 
-  const startTime = Date.now();
+  try {
+    // Initialize database connections
+    await PrismaClient.connect();
+    await MongoDBClient.connect();
 
-  // Stubbed generation result
-  const content = `Stub response for intent ${body.intent} by persona ${body.persona}.`;
-  const alternatives: string[] = [];
-  const model = body.params.model_override || 'gpt-4o-mini';
-  const temperature = body.params.temperature ?? 0.7;
+    // Use the enhanced orchestrator
+    const result = await orchestrator.generateContent(
+      userId,
+      body.projectId,
+      body.intent,
+      body.persona,
+      body.contextRefs,
+      body.params,
+      body.safety_overrides,
+      body.idempotency_key
+    );
 
-  // Persist AIGeneration log to Postgres
-  const generation = await prismaClient.aIGeneration.create({
-    data: {
-      userId: 'user_demo',
-      projectId: body.projectId,
-      requestId: body.idempotency_key || `req_${Date.now()}`,
-      persona: body.persona,
-      intent: body.intent,
-      content,
-      alternatives,
-      model,
-      temperature,
-      finishReason: 'stop',
-      contextHash: 'context_stub',
-      processingTimeMs: Date.now() - startTime,
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
-      estimatedCost: 0,
-      cached: false,
-    },
-  });
+    if (!result.success) {
+      reply.code(500);
+      return result;
+    }
 
-  // Cache minimal context in Mongo if provided
-  if (body.contextRefs.length > 0) {
-    await MongoDBClient.cacheAIContext({
-      projectId: body.projectId,
-      contextType: 'project',
-      contextId: body.projectId,
-      contextHash: 'context_stub',
-      summary: 'stub summary',
-      keyPoints: [],
-      entities: { characters: [], locations: [], events: [] },
-      metadata: { refs: body.contextRefs },
-      ttl: 3600,
-    });
+    return result;
+  } catch (error) {
+    app.log.error('AI generation error:', error);
+    reply.code(500);
+    return {
+      success: false,
+      error: {
+        code: 'AI_SERVICE_ERROR',
+        message: 'Internal server error during AI generation',
+        timestamp: new Date(),
+      },
+    };
   }
-
-  return {
-    success: true,
-    data: {
-      id: generation.id,
-      request_id: generation.requestId,
-      persona: generation.persona,
-      intent: generation.intent,
-      content: generation.content,
-      alternatives: generation.alternatives,
-      metadata: {
-        model: generation.model,
-        temperature: generation.temperature,
-        finish_reason: generation.finishReason as any,
-        context_version: 'v1',
-        context_hash: generation.contextHash,
-        processing_time_ms: generation.processingTimeMs,
-      },
-      usage: {
-        prompt_tokens: generation.promptTokens,
-        completion_tokens: generation.completionTokens,
-        total_tokens: generation.totalTokens,
-        estimated_cost: generation.estimatedCost,
-        model_tier: 'draft',
-      },
-      cached: generation.cached,
-      created_at: generation.createdAt,
-    },
-  };
 });
 
 app.listen({ port, host: '0.0.0.0' })
