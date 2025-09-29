@@ -5,14 +5,14 @@
     "module": "commonjs",
     "lib": ["es2020"],
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "../../",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
+    "declaration": false,
+    "declarationMap": false,
     "sourceMap": true,
     "removeComments": true,
     "noImplicitAny": true,
@@ -21,12 +21,18 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "baseUrl": ".",
+    "moduleResolution": "node",
+    "types": ["node"],
     "paths": {
       "@/*": ["./src/*"],
       "@worldbest/shared-types": ["../../packages/shared-types/src"],
       "@worldbest/database": ["../../packages/database/src"]
     }
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*",
+    "../../packages/database/src/**/*.ts",
+    "../../packages/shared-types/src/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }

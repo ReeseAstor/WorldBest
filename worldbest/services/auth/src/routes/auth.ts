@@ -46,9 +46,28 @@ const loginValidation = [
 
 // Routes
 router.post('/register', registerValidation, authController.register);
+router.post('/signup', registerValidation, authController.register); // alias for web client
 router.post('/login', authLimiter, loginValidation, authController.login);
 router.post('/refresh', authController.refresh);
 router.post('/logout', authController.logout);
 router.get('/me', authenticateToken, authController.me);
+
+// Password reset
+router.post('/forgot-password', authController.forgotPassword);
+router.post('/reset-password', authController.resetPassword);
+
+// Email verification
+router.post('/verify-email', authController.verifyEmail);
+router.post('/resend-verification', authenticateToken, authController.resendVerification);
+
+// Account management
+router.post('/change-password', authenticateToken, authController.changePassword);
+router.patch('/profile', authenticateToken, authController.updateProfile);
+router.delete('/account', authenticateToken, authController.deleteAccount);
+
+// 2FA
+router.post('/2fa/enable', authenticateToken, authController.enable2FA);
+router.post('/2fa/verify', authenticateToken, authController.verify2FA);
+router.post('/2fa/disable', authenticateToken, authController.disable2FA);
 
 export { router as authRoutes };

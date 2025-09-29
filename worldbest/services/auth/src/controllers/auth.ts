@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
+import speakeasy from 'speakeasy';
+import qrcode from 'qrcode';
 import { prisma } from '@worldbest/database';
-import { User } from '@worldbest/shared-types';
 import { jwtService } from '../services/jwt';
 import { passwordService } from '../services/password';
 import { redisService } from '../services/redis';
@@ -93,6 +94,7 @@ export class AuthController {
         message: 'User registered successfully',
         user,
         token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
         expiresAt: tokens.accessTokenExpiry,
         emailVerificationRequired: config.features.emailVerification && !user.emailVerified,
       });
@@ -201,7 +203,6 @@ export class AuthController {
         }
 
         // Verify 2FA token
-        const speakeasy = require('speakeasy');
         const isValid2FA = speakeasy.totp.verify({
           secret: user.twoFactorSecret,
           encoding: 'base32',
@@ -242,7 +243,7 @@ export class AuthController {
       logAuth('User logged in', user.id, { email: user.email, ip: req.ip });
 
       // Return user data without sensitive fields
-      const userData: Partial<User> = {
+      const userData = {
         id: user.id,
         email: user.email,
         displayName: user.displayName,
@@ -254,6 +255,7 @@ export class AuthController {
         message: 'Login successful',
         user: userData,
         token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
         expiresAt: tokens.accessTokenExpiry,
       });
     } catch (error) {
@@ -385,6 +387,356 @@ export class AuthController {
       logSecurity('Account locked due to failed attempts', { email, ip, attempts });
     } else {
       await redisService.setAccountLockout(email, attempts);
+    }
+  }
+
+  /**
+   * Request password reset
+   */
+  async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!config.features.passwordReset) {
+        return res.status(403).json({ error: 'Feature disabled' });
+      }
+
+      const { email } = req.body as { email?: string };
+      if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { email: email.toLowerCase() },
+        select: { id: true, email: true, displayName: true, deletedAt: true },
+      });
+
+      // Respond generically even if user not found
+      if (!user || user.deletedAt) {
+        return res.json({ message: 'If an account exists, an email was sent' });
+      }
+
+      const token = jwtService.generatePasswordResetToken();
+      await redisService.setPasswordResetToken(token, user.id, 60 * 60);
+      await emailService.sendPasswordResetEmail(user.email, user.displayName || user.email, token);
+
+      res.json({ message: 'If an account exists, an email was sent' });
+    } catch (error) {
+      logger.error('Forgot password error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Reset password
+   */
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!config.features.passwordReset) {
+        return res.status(403).json({ error: 'Feature disabled' });
+      }
+
+      const { token, password } = req.body as { token?: string; password?: string };
+      if (!token || !password) {
+        return res.status(400).json({ error: 'Token and password are required' });
+      }
+
+      // Validate password
+      const validation = passwordService.validatePassword(password);
+      if (!validation.isValid) {
+        return res.status(400).json({ error: 'Password validation failed', details: validation.errors });
+      }
+
+      const userId = await redisService.getPasswordResetToken(token);
+      if (!userId) {
+        return res.status(400).json({ error: 'Invalid or expired token' });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, deletedAt: true },
+      });
+      if (!user || user.deletedAt) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const passwordHash = await passwordService.hashPassword(password);
+      await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+      await redisService.deletePasswordResetToken(token);
+
+      res.json({ message: 'Password reset successfully' });
+    } catch (error) {
+      logger.error('Reset password error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Verify email
+   */
+  async verifyEmail(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!config.features.emailVerification) {
+        return res.status(403).json({ error: 'Feature disabled' });
+      }
+      const { token } = req.body as { token?: string };
+      if (!token) {
+        return res.status(400).json({ error: 'Token is required' });
+      }
+
+      const userId = await redisService.getEmailVerificationToken(token);
+      if (!userId) {
+        return res.status(400).json({ error: 'Invalid or expired token' });
+      }
+
+      await prisma.user.update({ where: { id: userId }, data: { emailVerified: true } });
+      await redisService.deleteEmailVerificationToken(token);
+
+      res.json({ message: 'Email verified successfully' });
+    } catch (error) {
+      logger.error('Verify email error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Resend verification email
+   */
+  async resendVerification(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!config.features.emailVerification) {
+        return res.status(403).json({ error: 'Feature disabled' });
+      }
+
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, displayName: true, emailVerified: true },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (user.emailVerified) {
+        return res.status(400).json({ error: 'Email already verified' });
+      }
+
+      const token = jwtService.generateEmailVerificationToken();
+      await redisService.setEmailVerificationToken(token, user.id, 24 * 60 * 60);
+      await emailService.sendVerificationEmail(user.email, user.displayName || user.email, token);
+
+      res.json({ message: 'Verification email sent' });
+    } catch (error) {
+      logger.error('Resend verification error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Change password
+   */
+  async changePassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Current and new passwords are required' });
+      }
+
+      const validation = passwordService.validatePassword(newPassword);
+      if (!validation.isValid) {
+        return res.status(400).json({ error: 'Password validation failed', details: validation.errors });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, passwordHash: true },
+      });
+      if (!user || !user.passwordHash) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const isValid = await passwordService.verifyPassword(currentPassword, user.passwordHash);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid current password' });
+      }
+
+      const passwordHash = await passwordService.hashPassword(newPassword);
+      await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+      res.json({ message: 'Password changed successfully' });
+    } catch (error) {
+      logger.error('Change password error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Update profile
+   */
+  async updateProfile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const allowed: Record<string, any> = {};
+      const { displayName, avatarUrl } = req.body as { displayName?: string; avatarUrl?: string };
+      if (typeof displayName === 'string') (allowed as any).displayName = displayName.trim();
+      if (typeof avatarUrl === 'string') (allowed as any).avatarUrl = avatarUrl.trim();
+
+      if (Object.keys(allowed).length === 0) {
+        return res.status(400).json({ error: 'No valid fields to update' });
+      }
+
+      const updated = await prisma.user.update({
+        where: { id: userId },
+        data: allowed as any,
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          avatarUrl: true,
+          emailVerified: true,
+          twoFactorEnabled: true,
+          plan: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      res.json(updated);
+    } catch (error) {
+      logger.error('Update profile error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Delete account (soft delete)
+   */
+  async deleteAccount(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      await prisma.user.update({ where: { id: userId }, data: { deletedAt: new Date() } });
+      res.json({ message: 'Account deleted' });
+    } catch (error) {
+      logger.error('Delete account error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Enable 2FA (returns QR code and secret)
+   */
+  async enable2FA(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!config.features.twoFactorAuth) {
+        return res.status(403).json({ error: 'Feature disabled' });
+      }
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const secret = speakeasy.generateSecret({
+        name: `${config.twoFactor.issuer} (${userId})`,
+        issuer: config.twoFactor.issuer,
+      });
+
+      await prisma.user.update({ where: { id: userId }, data: { twoFactorSecret: secret.base32, twoFactorEnabled: false } });
+
+      const otpauthUrl: string = secret.otpauth_url;
+      const qrCode: string = await qrcode.toDataURL(otpauthUrl);
+
+      res.json({ qrCode, secret: secret.base32 });
+    } catch (error) {
+      logger.error('Enable 2FA error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Verify 2FA token and enable
+   */
+  async verify2FA(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!config.features.twoFactorAuth) {
+        return res.status(403).json({ error: 'Feature disabled' });
+      }
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const { token } = req.body as { token?: string };
+      if (!token) {
+        return res.status(400).json({ error: 'Token is required' });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { twoFactorSecret: true } });
+      if (!user?.twoFactorSecret) {
+        return res.status(400).json({ error: '2FA not initialized' });
+      }
+
+      const valid = speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token, window: 2 });
+      if (!valid) {
+        return res.status(400).json({ error: 'Invalid 2FA token' });
+      }
+
+      await prisma.user.update({ where: { id: userId }, data: { twoFactorEnabled: true } });
+      res.json({ message: '2FA enabled' });
+    } catch (error) {
+      logger.error('Verify 2FA error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Disable 2FA
+   */
+  async disable2FA(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!config.features.twoFactorAuth) {
+        return res.status(403).json({ error: 'Feature disabled' });
+      }
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const { token } = req.body as { token?: string };
+      if (!token) {
+        return res.status(400).json({ error: 'Token is required' });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { twoFactorSecret: true } });
+      if (!user?.twoFactorSecret) {
+        return res.status(400).json({ error: '2FA not enabled' });
+      }
+
+      const valid = speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token, window: 2 });
+      if (!valid) {
+        return res.status(400).json({ error: 'Invalid 2FA token' });
+      }
+
+      await prisma.user.update({ where: { id: userId }, data: { twoFactorEnabled: false, twoFactorSecret: null } as any });
+      res.json({ message: '2FA disabled' });
+    } catch (error) {
+      logger.error('Disable 2FA error:', error);
+      next(error);
     }
   }
 }

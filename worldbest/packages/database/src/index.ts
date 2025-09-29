@@ -1,5 +1,6 @@
 export * from '@prisma/client';
 export { PrismaClient } from './prisma-client';
+export { prisma } from './prisma-client';
 export * from './mongodb/schemas';
 export { MongoDBClient } from './mongodb/client';
 export { RedisClient } from './redis/client';
