@@ -8,10 +8,10 @@ import { config } from './config';
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/error-handler';
 import { authMiddleware } from './middleware/auth';
-import { projectRoutes } from './routes/projects';
-import { characterRoutes } from './routes/characters';
-import { worldbuildingRoutes } from './routes/worldbuilding';
+import { analyticsRoutes } from './routes/analytics';
+import { reportsRoutes } from './routes/reports';
 import { healthRoutes } from './routes/health';
+import { AnalyticsService } from './services/analytics';
 
 const app = express();
 
@@ -49,7 +49,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Higher limit for project service
+  max: 1000, // Higher limit for analytics service
   message: {
     error: 'Too many requests from this IP, please try again later.',
   },
@@ -70,15 +70,13 @@ app.use((req, res, next) => {
 });
 
 // Auth middleware for protected routes
-app.use('/projects', authMiddleware);
-app.use('/characters', authMiddleware);
-app.use('/worldbuilding', authMiddleware);
+app.use('/analytics', authMiddleware);
+app.use('/reports', authMiddleware);
 
 // Routes
 app.use('/health', healthRoutes);
-app.use('/projects', projectRoutes);
-app.use('/characters', characterRoutes);
-app.use('/worldbuilding', worldbuildingRoutes);
+app.use('/analytics', analyticsRoutes);
+app.use('/reports', reportsRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -94,11 +92,18 @@ app.use(errorHandler);
 // Initialize database connection
 const prisma = PrismaClient.getInstance();
 
+// Initialize analytics service
+const analyticsService = new AnalyticsService(prisma);
+
+// Start background jobs
+analyticsService.startBackgroundJobs();
+
 // Graceful shutdown
 const gracefulShutdown = async () => {
   logger.info('Received shutdown signal, closing server...');
   
   try {
+    analyticsService.stopBackgroundJobs();
     await prisma.$disconnect();
     logger.info('Database connection closed');
     process.exit(0);
@@ -114,7 +119,7 @@ process.on('SIGINT', gracefulShutdown);
 // Start server
 const PORT = config.port;
 const server = app.listen(PORT, '0.0.0.0', () => {
-  logger.info(`Project service listening on port ${PORT}`, {
+  logger.info(`Analytics service listening on port ${PORT}`, {
     environment: config.env,
     nodeVersion: process.version,
   });
