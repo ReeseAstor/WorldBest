@@ -1,0 +1,162 @@
+# Development Docker Compose Configuration
+# This file extends the main docker-compose.yml for development
+
+version: '3.9'
+
+services:
+  # Override web service for development
+  web:
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile
+      target: development
+    volumes:
+      - ./apps/web:/app/apps/web
+      - ./packages:/app/packages
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost/api
+      - NEXT_PUBLIC_WS_URL=ws://localhost/ws
+    command: ["pnpm", "dev"]
+
+  # Override auth service for development
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./services/auth/Dockerfile
+      target: development
+    volumes:
+      - ./services/auth:/app/services/auth
+      - ./packages:/app/packages
+      - /app/services/auth/node_modules
+    environment:
+      - NODE_ENV=development
+    command: ["pnpm", "--filter", "@worldbest/auth-service", "dev"]
+
+  # Override project service for development
+  project-service:
+    build:
+      context: .
+      dockerfile: ./services/project/Dockerfile
+      target: development
+    volumes:
+      - ./services/project:/app/services/project
+      - ./packages:/app/packages
+      - /app/services/project/node_modules
+    environment:
+      - NODE_ENV=development
+    command: ["pnpm", "--filter", "@worldbest/project-service", "dev"]
+
+  # Development database with volume for persistence
+  postgres-dev:
+    extends:
+      service: postgres
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./packages/database/prisma/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+
+  # Development Redis with persistence
+  redis-dev:
+    extends:
+      service: redis
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts
+
+  # Development tools
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: worldbest-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@worldbest.ai
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - worldbest-network
+    depends_on:
+      - postgres
+
+  # MongoDB Express for database management
+  mongo-express:
+    image: mongo-express:latest
+    container_name: worldbest-mongo-express
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: worldbest
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_PASSWORD:-worldbest123}
+      ME_CONFIG_MONGODB_URL: mongodb://worldbest:${MONGO_PASSWORD:-worldbest123}@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin123
+    ports:
+      - "8081:8081"
+    networks:
+      - worldbest-network
+    depends_on:
+      - mongodb
+
+  # Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: worldbest-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD:-worldbest123}
+      HTTP_USER: admin
+      HTTP_PASSWORD: admin123
+    ports:
+      - "8082:8081"
+    networks:
+      - worldbest-network
+    depends_on:
+      - redis
+
+  # Mailhog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: worldbest-mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - worldbest-network
+
+  # Elasticsearch for logging (development)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: worldbest-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - worldbest-network
+
+  # Kibana for log visualization
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: worldbest-kibana
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - worldbest-network
+    depends_on:
+      - elasticsearch
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+  pgadmin_data:
+  elasticsearch_data:

@@ -1,65 +1,130 @@
 import winston from 'winston';
-import path from 'path';
+import { config } from '../config';
 
-const logDir = process.env.LOG_DIR || 'logs';
+// Define log levels
+const levels = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  http: 3,
+  debug: 4,
+};
 
-// Define log format
-const logFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+// Define colors for each level
+const colors = {
+  error: 'red',
+  warn: 'yellow',
+  info: 'green',
+  http: 'magenta',
+  debug: 'white',
+};
+
+// Tell winston about our colors
+winston.addColors(colors);
+
+// Define format based on environment
+const format = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
   winston.format.errors({ stack: true }),
   winston.format.splat(),
   winston.format.json()
 );
 
-// Console format for development
-const consoleFormat = winston.format.combine(
-  winston.format.colorize(),
-  winston.format.timestamp({ format: 'HH:mm:ss' }),
-  winston.format.printf(({ timestamp, level, message, ...metadata }) => {
-    let msg = `${timestamp} [${level}]: ${message}`;
-    if (Object.keys(metadata).length > 0) {
-      msg += ` ${JSON.stringify(metadata)}`;
-    }
-    return msg;
-  })
+// Define different formats for different environments
+const developmentFormat = winston.format.combine(
+  winston.format.colorize({ all: true }),
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
+  winston.format.errors({ stack: true }),
+  winston.format.printf(
+    (info) => `${info.timestamp} ${info.level}: ${info.message}${info.stack ? '\n' + info.stack : ''}`
+  )
 );
 
-// Create logger instance
-export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: logFormat,
-  defaultMeta: { service: 'auth-service' },
-  transports: [
-    // Console transport
-    new winston.transports.Console({
-      format: process.env.NODE_ENV === 'development' ? consoleFormat : logFormat,
-    }),
-  ],
-});
+// Define transports
+const transports: winston.transport[] = [];
 
-// Add file transports in production
-if (process.env.NODE_ENV === 'production') {
-  logger.add(
-    new winston.transports.File({
-      filename: path.join(logDir, 'error.log'),
-      level: 'error',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
+// Console transport
+if (config.env === 'development') {
+  transports.push(
+    new winston.transports.Console({
+      format: developmentFormat,
     })
   );
-
-  logger.add(
-    new winston.transports.File({
-      filename: path.join(logDir, 'combined.log'),
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
+} else {
+  transports.push(
+    new winston.transports.Console({
+      format,
     })
   );
 }
 
-// Create a stream object for Morgan HTTP logger
-export const loggerStream = {
+// File transports for production
+if (config.env === 'production') {
+  transports.push(
+    new winston.transports.File({
+      filename: 'logs/error.log',
+      level: 'error',
+      format,
+    }),
+    new winston.transports.File({
+      filename: 'logs/combined.log',
+      format,
+    })
+  );
+}
+
+// Create the logger
+export const logger = winston.createLogger({
+  level: config.logging.level,
+  levels,
+  format,
+  transports,
+  exitOnError: false,
+});
+
+// Create a stream object for HTTP request logging
+export const logStream = {
   write: (message: string) => {
-    logger.info(message.trim());
+    logger.http(message.trim());
   },
+};
+
+// Helper functions for structured logging
+export const logWithContext = (level: string, message: string, context?: Record<string, any>) => {
+  logger.log(level, message, context);
+};
+
+export const logError = (error: Error, context?: Record<string, any>) => {
+  logger.error(error.message, {
+    ...context,
+    stack: error.stack,
+    name: error.name,
+  });
+};
+
+export const logRequest = (req: any, res: any, responseTime?: number) => {
+  logger.http('HTTP Request', {
+    method: req.method,
+    url: req.url,
+    statusCode: res.statusCode,
+    responseTime: responseTime ? `${responseTime}ms` : undefined,
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    userId: req.user?.id,
+  });
+};
+
+export const logAuth = (event: string, userId?: string, context?: Record<string, any>) => {
+  logger.info(`Auth: ${event}`, {
+    ...context,
+    userId,
+    timestamp: new Date().toISOString(),
+  });
+};
+
+export const logSecurity = (event: string, context?: Record<string, any>) => {
+  logger.warn(`Security: ${event}`, {
+    ...context,
+    timestamp: new Date().toISOString(),
+  });
 };

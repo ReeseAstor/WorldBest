@@ -119,21 +119,36 @@ async function main() {
     },
   });
 
-  const sciFiProject = await prisma.project.create({
-    data: {
-      title: 'Quantum Paradox',
-      synopsis: 'A hard science fiction thriller exploring the consequences of time travel and parallel universes when a physicist discovers a way to communicate with alternate versions of herself.',
-      genre: 'sci-fi',
-      ownerId: demoUser.id,
-      targetAudience: 'adult',
-      contentRating: 'R',
-      visibility: 'private',
-      draftModel: 'gpt-4',
-      polishModel: 'claude-3',
-      temperatureDraft: 0.8,
-      temperaturePolish: 0.4,
-    },
-  });
+  // Add relationships between characters
+  const characters = project.characters;
+  if (characters.length >= 2) {
+    await prisma.relationship.create({
+      data: {
+        characterId: characters[0].id,
+        relatedCharId: characters[1].id,
+        relationshipType: 'friend',
+        description: 'Childhood friends who grew up together',
+        dynamics: 'Supportive but sometimes competitive',
+        tensionPoints: ['Different life goals', 'Past romantic interest'],
+      },
+    });
+  }
+
+  // Add text versions to scenes
+  const scenes = project.books[0].chapters.flatMap((c: any) => c.scenes);
+  for (const scene of scenes.slice(0, 3)) {
+    await prisma.textVersion.create({
+      data: {
+        sceneId: scene.id,
+        authorId: userId,
+        content: faker.lorem.paragraphs(5, '\n\n'),
+        summary: faker.lorem.paragraph(),
+        semanticHash: faker.string.alphanumeric(32),
+        wordCount: faker.number.int({ min: 500, max: 2000 }),
+        aiGenerated: false,
+      },
+    });
+  }
 
   const mysteryProject = await prisma.project.create({
     data: {

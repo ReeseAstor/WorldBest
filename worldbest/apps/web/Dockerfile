@@ -1,36 +1,47 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Multi-stage Dockerfile for Next.js application
 
+# Base stage for dependencies
+FROM node:18-alpine AS base
+RUN apk add --no-cache libc6-compat
+RUN npm install -g pnpm
+
+# Dependencies stage
+FROM base AS deps
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@8.11.0
-
-# Copy workspace files
-COPY pnpm-workspace.yaml ./
-COPY package.json ./
-COPY pnpm-lock.yaml ./
-
-# Copy packages
-COPY packages ./packages
-
-# Copy web app
-COPY apps/web ./apps/web
+# Copy package files
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
+COPY apps/web/package.json ./apps/web/
+COPY packages/shared-types/package.json ./packages/shared-types/
+COPY packages/ui-components/package.json ./packages/ui-components/
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Build packages
-RUN pnpm -F @worldbest/shared-types build
-RUN pnpm -F @worldbest/ui-components build || true
+# Builder stage
+FROM base AS builder
+WORKDIR /app
 
-# Build web app
+# Copy dependencies
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/packages/shared-types/node_modules ./packages/shared-types/node_modules
+COPY --from=deps /app/packages/ui-components/node_modules ./packages/ui-components/node_modules
+
+# Copy source code
+COPY . .
+
+# Build shared packages first
+RUN pnpm --filter @worldbest/shared-types build
+RUN pnpm --filter @worldbest/ui-components build
+
+# Build the web application
 ENV NEXT_TELEMETRY_DISABLED 1
-RUN pnpm -F @worldbest/web build
+ENV NODE_ENV production
+RUN pnpm --filter @worldbest/web build
 
 # Production stage
-FROM node:20-alpine AS runner
-
+FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
@@ -41,37 +52,21 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copy built application
-COPY --from=builder /app/apps/web/public ./public
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+# Set permissions for prerender cache
+RUN mkdir apps/web/.next
+RUN chown nextjs:nodejs apps/web/.next
+
+# Copy built files with correct ownership
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 
 USER nextjs
 
 EXPOSE 3000
 
 ENV PORT 3000
+ENV HOSTNAME "0.0.0.0"
 
 CMD ["node", "apps/web/server.js"]
-
-# Development stage
-FROM node:20-alpine AS development
-
-WORKDIR /app
-
-# Install pnpm
-RUN npm install -g pnpm@8.11.0
-
-# Copy workspace files
-COPY pnpm-workspace.yaml ./
-COPY package.json ./
-COPY pnpm-lock.yaml ./
-
-# Install all dependencies
-RUN pnpm install --frozen-lockfile
-
-# Copy source code
-COPY . .
-
-EXPOSE 3000
-
-CMD ["pnpm", "-F", "@worldbest/web", "dev"]

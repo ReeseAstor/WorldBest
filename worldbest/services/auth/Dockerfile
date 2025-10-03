@@ -1,56 +1,65 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Multi-stage Dockerfile for Auth Service
 
+# Base stage for dependencies
+FROM node:18-alpine AS base
+RUN apk add --no-cache libc6-compat
+RUN npm install -g pnpm
+
+# Dependencies stage
+FROM base AS deps
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@8.11.0
-
-# Copy workspace files
-COPY pnpm-workspace.yaml ./
-COPY package.json ./
-COPY pnpm-lock.yaml ./
-
-# Copy packages
-COPY packages ./packages
-
-# Copy auth service
-COPY services/auth ./services/auth
+# Copy package files
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
+COPY services/auth/package.json ./services/auth/
+COPY packages/shared-types/package.json ./packages/shared-types/
+COPY packages/database/package.json ./packages/database/
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Build packages
-RUN pnpm -F @worldbest/database build
-RUN pnpm -F @worldbest/shared-types build
-
-# Build auth service
-RUN pnpm -F @worldbest/auth-service build
-
-# Production stage
-FROM node:20-alpine
-
+# Builder stage
+FROM base AS builder
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@8.11.0
+# Copy dependencies
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/services/auth/node_modules ./services/auth/node_modules
+COPY --from=deps /app/packages/shared-types/node_modules ./packages/shared-types/node_modules
+COPY --from=deps /app/packages/database/node_modules ./packages/database/node_modules
 
-# Copy built application
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/services/auth/dist ./dist
-COPY --from=builder /app/services/auth/package.json ./
+# Copy source code
+COPY . .
+
+# Build shared packages first
+RUN pnpm --filter @worldbest/shared-types build
+RUN pnpm --filter @worldbest/database build
+
+# Build the auth service
+ENV NODE_ENV production
+RUN pnpm --filter @worldbest/auth-service build
+
+# Production stage
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV production
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 authservice
 
-USER nodejs
+# Copy built application
+COPY --from=builder --chown=authservice:nodejs /app/services/auth/dist ./services/auth/dist
+COPY --from=builder --chown=authservice:nodejs /app/services/auth/package.json ./services/auth/
+COPY --from=builder --chown=authservice:nodejs /app/packages ./packages
+COPY --from=builder --chown=authservice:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=authservice:nodejs /app/package.json ./
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3001/health', (r) => {r.statusCode === 200 ? process.exit(0) : process.exit(1)})"
+USER authservice
 
 EXPOSE 3001
 
-CMD ["node", "dist/index.js"]
+ENV PORT 3001
+
+CMD ["node", "services/auth/dist/index.js"]

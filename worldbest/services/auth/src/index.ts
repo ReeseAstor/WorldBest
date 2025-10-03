@@ -1,84 +1,135 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { config } from 'dotenv';
-import { authRouter } from './routes/auth.routes';
-import { userRouter } from './routes/user.routes';
-import { errorHandler } from './middleware/error.middleware';
-import { rateLimiter } from './middleware/rate-limit.middleware';
+import compression from 'compression';
+import cookieParser from 'cookie-parser';
+import rateLimit from 'express-rate-limit';
+import { config } from './config';
 import { logger } from './utils/logger';
-import { initializeDatabase } from './utils/database';
-import { initializeRedis } from './utils/redis';
-import { initializePassport } from './config/passport';
-
-// Load environment variables
-config();
+import { errorHandler } from './middleware/error-handler';
+import { authRoutes } from './routes/auth';
+import { healthRoutes } from './routes/health';
+import { redisClient } from './services/redis';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
-// Initialize services
-async function initializeServices() {
-  try {
-    await initializeDatabase();
-    await initializeRedis();
-    initializePassport();
-    logger.info('All services initialized successfully');
-  } catch (error) {
-    logger.error('Failed to initialize services:', error);
-    process.exit(1);
-  }
-}
+// Trust proxy for rate limiting and IP detection
+app.set('trust proxy', 1);
 
-// Middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
-  credentials: true
+// Security middleware
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(rateLimiter);
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    service: 'auth-service',
-    timestamp: new Date().toISOString() 
+// CORS configuration
+app.use(cors({
+  origin: config.cors.allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
+
+// Compression
+app.use(compression());
+
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: redisClient ? new (require('express-rate-limit-redis'))({
+    client: redisClient,
+    prefix: 'rl:auth:',
+  }) : undefined,
+});
+
+app.use(limiter);
+
+// Request logging
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.path}`, {
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    requestId: req.headers['x-request-id'],
   });
+  next();
 });
 
 // Routes
-app.use('/api/v1/auth', authRouter);
-app.use('/api/v1/users', userRouter);
+app.use('/health', healthRoutes);
+app.use('/auth', authRoutes);
 
-// Error handling middleware (must be last)
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: 'The requested resource was not found.',
+  });
+});
+
+// Error handling
 app.use(errorHandler);
 
-// Start server
-async function startServer() {
-  await initializeServices();
+// Graceful shutdown
+const gracefulShutdown = async () => {
+  logger.info('Received shutdown signal, closing server...');
   
-  app.listen(PORT, () => {
-    logger.info(`Auth service running on port ${PORT}`);
-    logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  try {
+    if (redisClient) {
+      await redisClient.quit();
+      logger.info('Redis connection closed');
+    }
+    
+    process.exit(0);
+  } catch (error) {
+    logger.error('Error during shutdown:', error);
+    process.exit(1);
+  }
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+
+// Start server
+const PORT = config.port;
+const server = app.listen(PORT, '0.0.0.0', () => {
+  logger.info(`Auth service listening on port ${PORT}`, {
+    environment: config.env,
+    nodeVersion: process.version,
   });
-}
-
-// Handle graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, shutting down gracefully...');
-  process.exit(0);
 });
 
-process.on('SIGINT', async () => {
-  logger.info('SIGINT received, shutting down gracefully...');
-  process.exit(0);
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', { promise, reason });
+  server.close(() => {
+    process.exit(1);
+  });
 });
 
-// Start the server
-startServer().catch((error) => {
-  logger.error('Failed to start server:', error);
-  process.exit(1);
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
+  server.close(() => {
+    process.exit(1);
+  });
 });
+
+export { app };

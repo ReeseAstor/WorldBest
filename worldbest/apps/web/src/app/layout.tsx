@@ -1,45 +1,83 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { Providers } from './providers';
-import { Toaster } from 'sonner';
+import { Inter, Georgia } from 'next/font/google';
+import { Providers } from '@/components/providers';
+import { Toaster } from '@/components/ui/toaster';
+import '@/styles/globals.css';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
+const georgia = Georgia({ 
+  weight: ['400', '700'], 
+  subsets: ['latin'], 
+  variable: '--font-serif' 
+});
 
 export const metadata: Metadata = {
-  title: 'WorldBest - AI-Powered Writing Platform',
-  description: 'A comprehensive platform for writers combining Story Bibles, AI-assisted content generation, collaboration tools, and publishing capabilities.',
-  keywords: 'writing, AI, story bible, worldbuilding, collaboration, publishing',
+  title: {
+    template: '%s | WorldBest',
+    default: 'WorldBest - AI-Powered Writing Platform',
+  },
+  description: 'A production-ready commercial platform for writers featuring comprehensive story bibles, AI-assisted content generation, collaboration tools, and subscription billing.',
+  keywords: [
+    'writing',
+    'storytelling',
+    'AI',
+    'worldbuilding',
+    'characters',
+    'story bible',
+    'writing tools',
+    'creative writing',
+    'fiction writing',
+    'collaboration',
+  ],
   authors: [{ name: 'WorldBest Team' }],
   creator: 'WorldBest',
   publisher: 'WorldBest',
-  robots: {
-    index: true,
-    follow: true,
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
   },
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://worldbest.ai',
-    siteName: 'WorldBest',
+    url: '/',
     title: 'WorldBest - AI-Powered Writing Platform',
-    description: 'Empower your writing with AI assistants, comprehensive worldbuilding tools, and collaborative features.',
+    description: 'A production-ready commercial platform for writers featuring comprehensive story bibles, AI-assisted content generation, collaboration tools, and subscription billing.',
+    siteName: 'WorldBest',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'WorldBest Platform',
+        alt: 'WorldBest - AI-Powered Writing Platform',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'WorldBest - AI-Powered Writing Platform',
-    description: 'Empower your writing with AI assistants, comprehensive worldbuilding tools, and collaborative features.',
-    images: ['/twitter-image.png'],
+    description: 'A production-ready commercial platform for writers featuring comprehensive story bibles, AI-assisted content generation, collaboration tools, and subscription billing.',
+    images: ['/og-image.png'],
     creator: '@worldbest',
   },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon-16x16.png',
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/site.webmanifest',
 };
 
 export default function RootLayout({
@@ -49,15 +87,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <head />
+      <body 
+        className={`${inter.variable} ${georgia.variable} font-sans antialiased`}
+        suppressHydrationWarning
+      >
         <Providers>
           {children}
-          <Toaster 
-            position="bottom-right"
-            toastOptions={{
-              duration: 4000,
-            }}
-          />
+          <Toaster />
         </Providers>
       </body>
     </html>
