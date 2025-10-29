@@ -1,4 +1,5 @@
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -11,8 +12,14 @@ import { projectRoutes } from './routes/projects';
 import { characterRoutes } from './routes/characters';
 import { worldbuildingRoutes } from './routes/worldbuilding';
 import { healthRoutes } from './routes/health';
+import versionControlRoutes from './routes/version-control';
+import collaborativeEditingRoutes from './routes/collaborative-editing';
+import templatesRoutes from './routes/templates';
+import analyticsRoutes from './routes/analytics';
+import { CollaborativeWebSocketServer } from './websocket/collaborative-websocket';
 
 const app = express();
+const server = createServer(app);
 
 // Trust proxy for rate limiting and IP detection
 app.set('trust proxy', 1);
@@ -72,12 +79,20 @@ app.use((req, res, next) => {
 app.use('/projects', authMiddleware);
 app.use('/characters', authMiddleware);
 app.use('/worldbuilding', authMiddleware);
+app.use('/versions', authMiddleware);
+app.use('/collaborative', authMiddleware);
+app.use('/templates', authMiddleware);
+app.use('/analytics', authMiddleware);
 
 // Routes
 app.use('/health', healthRoutes);
 app.use('/projects', projectRoutes);
 app.use('/characters', characterRoutes);
 app.use('/worldbuilding', worldbuildingRoutes);
+app.use('/versions', versionControlRoutes);
+app.use('/collaborative', collaborativeEditingRoutes);
+app.use('/templates', templatesRoutes);
+app.use('/analytics', analyticsRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -101,7 +116,11 @@ process.on('SIGINT', gracefulShutdown);
 
 // Start server
 const PORT = config.port;
-const server = app.listen(PORT, '0.0.0.0', () => {
+
+// Initialize WebSocket server for collaborative editing
+const collaborativeWS = new CollaborativeWebSocketServer(server);
+
+const httpServer = server.listen(PORT, '0.0.0.0', () => {
   logger.info(`Project service listening on port ${PORT}`, {
     environment: config.env,
     nodeVersion: process.version,
@@ -111,7 +130,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection at:', { promise, reason });
-  server.close(() => {
+  httpServer.close(() => {
     process.exit(1);
   });
 });
@@ -119,9 +138,9 @@ process.on('unhandledRejection', (reason, promise) => {
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);
-  server.close(() => {
+  httpServer.close(() => {
     process.exit(1);
   });
 });
 
-export { app };
+export { app, server, collaborativeWS };

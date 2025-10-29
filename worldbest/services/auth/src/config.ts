@@ -57,10 +57,59 @@ export const config = {
     },
   },
   
-  // 2FA
-  twoFactor: {
-    serviceName: process.env.TWO_FACTOR_SERVICE_NAME || 'WorldBest',
-    issuer: process.env.TWO_FACTOR_ISSUER || 'WorldBest',
+  // Multi-Factor Authentication
+  mfa: {
+    issuer: process.env.MFA_ISSUER || 'WorldBest',
+    totp: {
+      window: parseInt(process.env.TOTP_WINDOW || '2', 10), // Time steps to allow
+      step: parseInt(process.env.TOTP_STEP || '30', 10), // Time step in seconds
+    },
+    backupCodes: {
+      count: parseInt(process.env.BACKUP_CODES_COUNT || '10', 10),
+      salt: process.env.BACKUP_CODES_SALT || 'worldbest-backup-salt-change-in-production',
+    },
+    sms: {
+      enabled: process.env.SMS_ENABLED === 'true',
+      codeExpiry: parseInt(process.env.SMS_CODE_EXPIRY || '300', 10), // 5 minutes
+    },
+    email: {
+      enabled: process.env.EMAIL_MFA_ENABLED !== 'false',
+      codeExpiry: parseInt(process.env.EMAIL_CODE_EXPIRY || '600', 10), // 10 minutes
+    },
+  },
+
+  // SMS Configuration
+  sms: {
+    twilio: {
+      accountSid: process.env.TWILIO_ACCOUNT_SID,
+      authToken: process.env.TWILIO_AUTH_TOKEN,
+      phoneNumber: process.env.TWILIO_PHONE_NUMBER,
+    },
+  },
+
+  // OAuth2 Configuration
+  oauth: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri: process.env.GOOGLE_REDIRECT_URI || `${process.env.APP_URL || 'http://localhost:3000'}/auth/callback/google`,
+    },
+    github: {
+      clientId: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      redirectUri: process.env.GITHUB_REDIRECT_URI || `${process.env.APP_URL || 'http://localhost:3000'}/auth/callback/github`,
+    },
+    discord: {
+      clientId: process.env.DISCORD_CLIENT_ID,
+      clientSecret: process.env.DISCORD_CLIENT_SECRET,
+      redirectUri: process.env.DISCORD_REDIRECT_URI || `${process.env.APP_URL || 'http://localhost:3000'}/auth/callback/discord`,
+    },
+  },
+
+  // Application
+  app: {
+    name: process.env.APP_NAME || 'WorldBest',
+    url: process.env.APP_URL || 'https://worldbest.ai',
   },
   
   // Rate limiting

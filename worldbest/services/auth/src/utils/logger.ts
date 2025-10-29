@@ -1,5 +1,7 @@
 import winston from 'winston';
 import { config } from '../config';
+import { AuditEventType, AuditSeverity } from '../services/audit';
+import { Request } from 'express';
 
 // Define log levels
 const levels = {
@@ -120,11 +122,68 @@ export const logAuth = (event: string, userId?: string, context?: Record<string,
     userId,
     timestamp: new Date().toISOString(),
   });
+
+  // Import auditService dynamically to avoid circular dependency
+  import('../services/audit').then(({ auditService }) => {
+    auditService.logEvent(
+      AuditEventType.LOGIN_SUCCESS, // Default, should be parameterized
+      AuditSeverity.LOW,
+      { event, ...context },
+      undefined,
+      userId
+    ).catch(error => {
+      logger.error('Failed to log auth event to audit service:', error);
+    });
+  });
 };
 
 export const logSecurity = (event: string, context?: Record<string, any>) => {
   logger.warn(`Security: ${event}`, {
     ...context,
     timestamp: new Date().toISOString(),
+  });
+
+  // Import auditService dynamically to avoid circular dependency
+  import('../services/audit').then(({ auditService }) => {
+    auditService.logEvent(
+      AuditEventType.SUSPICIOUS_ACTIVITY,
+      AuditSeverity.MEDIUM,
+      { event, ...context },
+      undefined,
+      context?.userId
+    ).catch(error => {
+      logger.error('Failed to log security event to audit service:', error);
+    });
+  });
+};
+
+/**
+ * Log audit events directly
+ */
+export const logAudit = (
+  eventType: AuditEventType,
+  severity: AuditSeverity,
+  details: Record<string, any>,
+  req?: Request,
+  userId?: string
+) => {
+  logger.info('Audit event', {
+    eventType,
+    severity,
+    userId,
+    ...details,
+  });
+
+  // Import auditService dynamically to avoid circular dependency
+  import('../services/audit').then(({ auditService }) => {
+    auditService.logEvent(
+      eventType,
+      severity,
+      details,
+      req,
+      userId
+    ).catch(error => {
+      logger.error('Failed to log audit event:', error);
+    });
   });
 };

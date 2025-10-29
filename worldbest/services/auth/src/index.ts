@@ -8,6 +8,8 @@ import { config } from './config';
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/error-handler';
 import { authRoutes } from './routes/auth';
+import { mfaRoutes } from './routes/mfa';
+import { oauth2Routes } from './routes/oauth2';
 import { healthRoutes } from './routes/health';
 import { redisClient } from './services/redis';
 
@@ -75,6 +77,8 @@ app.use((req, res, next) => {
 // Routes
 app.use('/health', healthRoutes);
 app.use('/auth', authRoutes);
+app.use('/mfa', mfaRoutes);
+app.use('/oauth', oauth2Routes);
 
 // 404 handler
 app.use('*', (req, res) => {

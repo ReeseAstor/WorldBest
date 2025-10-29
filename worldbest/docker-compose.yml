@@ -280,6 +280,98 @@ services:
       timeout: 10s
       retries: 3
 
+  # Collaboration Service
+  collaboration-service:
+    build:
+      context: .
+      dockerfile: ./services/collaboration/Dockerfile
+    container_name: worldbest-collaboration
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://worldbest:${POSTGRES_PASSWORD:-worldbest123}@postgres:5432/worldbest?schema=public
+      MONGODB_URI: mongodb://worldbest:${MONGO_PASSWORD:-worldbest123}@mongodb:27017/worldbest?authSource=admin
+      REDIS_URL: redis://:${REDIS_PASSWORD:-worldbest123}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+      PORT: 3006
+    ports:
+      - "3006:3006"
+    networks:
+      - worldbest-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Analytics Service
+  analytics-service:
+    build:
+      context: .
+      dockerfile: ./services/analytics/Dockerfile
+    container_name: worldbest-analytics
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://worldbest:${POSTGRES_PASSWORD:-worldbest123}@postgres:5432/worldbest?schema=public
+      MONGODB_URI: mongodb://worldbest:${MONGO_PASSWORD:-worldbest123}@mongodb:27017/worldbest?authSource=admin
+      REDIS_URL: redis://:${REDIS_PASSWORD:-worldbest123}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+      PORT: 3007
+    ports:
+      - "3007:3007"
+    networks:
+      - worldbest-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./services/notification/Dockerfile
+    container_name: worldbest-notification
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://worldbest:${POSTGRES_PASSWORD:-worldbest123}@postgres:5432/worldbest?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD:-worldbest123}@redis:6379
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+      PORT: 3008
+    ports:
+      - "3008:3008"
+    networks:
+      - worldbest-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Web Frontend
   web:
     build:
