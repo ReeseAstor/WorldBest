@@ -22,7 +22,7 @@
     "express-validator": "^7.0.1",
     "bull": "^4.12.2",
     "redis": "^4.6.10",
-    "nodemailer": "^6.9.7",
+    "nodemailer": "^7.0.10",
     "@sendgrid/mail": "^8.1.0",
     "twilio": "^4.19.3",
     "web-push": "^3.6.6",
