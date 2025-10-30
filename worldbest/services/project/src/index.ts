@@ -143,4 +143,8 @@ process.on('uncaughtException', (error) => {
   });
 });
 
+<<<<<<< HEAD
 export { app, server, collaborativeWS };
+=======
+export { app };
+>>>>>>> 96f231cb21277b8c88265b316e50036aaa665227

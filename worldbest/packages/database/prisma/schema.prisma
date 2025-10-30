@@ -17,16 +17,20 @@ model User {
   username          String?   @unique
   displayName       String    @map("display_name")
   avatarUrl         String?   @map("avatar_url")
-  passwordHash      String?   @map("password_hash")
-  emailVerified     Boolean   @default(false) @map("email_verified")
+  password          String    @map("password_hash")
+  role              String    @default("user")
+  isEmailVerified   Boolean   @default(false) @map("email_verified")
   emailVerifiedAt   DateTime? @map("email_verified_at")
+  emailVerificationToken String? @map("email_verification_token")
+  resetToken        String?   @map("reset_token")
+  resetTokenExpiry  DateTime? @map("reset_token_expiry")
   twoFactorEnabled  Boolean   @default(false) @map("two_factor_enabled")
   twoFactorSecret   String?   @map("two_factor_secret")
   
   plan              String    @default("story_starter")
   billingCustomerId String?   @map("billing_customer_id")
   
-  lastLogin         DateTime? @map("last_login")
+  lastLoginAt       DateTime? @map("last_login_at")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   deletedAt         DateTime? @map("deleted_at")
@@ -60,12 +64,15 @@ model User {
 model Session {
   id           String    @id @default(cuid())
   userId       String    @map("user_id")
-  token        String    @unique
-  refreshToken String    @unique @map("refresh_token")
+  token        String?   @unique
+  refreshToken String?   @unique @map("refresh_token")
   expiresAt    DateTime  @map("expires_at")
   ipAddress    String?   @map("ip_address")
   userAgent    String?   @map("user_agent")
   deviceId     String?   @map("device_id")
+  deviceInfo   Json?     @map("device_info")
+  isValid      Boolean   @default(true) @map("is_valid")
+  invalidatedAt DateTime? @map("invalidated_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)

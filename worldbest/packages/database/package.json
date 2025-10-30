@@ -5,13 +5,15 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "prisma generate && tsc",
+    "dev": "prisma generate && tsc --watch",
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
-    "migrate:prod": "prisma migrate deploy",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:reset": "prisma migrate reset",
     "studio": "prisma studio",
-    "seed": "ts-node ./src/seed.ts",
+    "seed": "tsx ./src/seed.ts",
+    "db:push": "prisma db push",
     "test": "jest"
   },
   "dependencies": {
@@ -19,13 +21,15 @@
     "mongoose": "^8.0.0",
     "redis": "^4.6.0",
     "ioredis": "^5.3.0",
-    "@pinecone-database/pinecone": "^1.1.0"
+    "@pinecone-database/pinecone": "^1.1.0",
+    "bcryptjs": "^2.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "@types/bcryptjs": "^2.4.6",
     "prisma": "^5.7.0",
     "ts-node": "^10.9.0",
+    "tsx": "^4.6.0",
     "typescript": "^5.3.0",
     "@worldbest/shared-types": "workspace:*",
     "bcryptjs": "^2.4.3",

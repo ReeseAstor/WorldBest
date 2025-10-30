@@ -32,18 +32,26 @@ export enum ContextType {
 
 export enum AIIntent {
   // Muse intents
-  BRAINSTORM = 'brainstorm',
+  BRAINSTORM_IDEAS = 'brainstorm_ideas',
   GENERATE_SCENE = 'generate_scene',
+  CONTINUE_SCENE = 'continue_scene',
   EXPAND_DESCRIPTION = 'expand_description',
   CREATE_DIALOGUE = 'create_dialogue',
+  DESCRIBE_SCENE = 'describe_scene',
   SENSORY_DETAILS = 'sensory_details',
+  DEVELOP_CHARACTER = 'develop_character',
+  EXPAND_WORLDBUILDING = 'expand_worldbuilding',
+  SUGGEST_PLOT = 'suggest_plot',
   
   // Editor intents
+  REVISE_TEXT = 'revise_text',
+  IMPROVE_DIALOGUE = 'improve_dialogue',
   LINE_EDIT = 'line_edit',
   GRAMMAR_CHECK = 'grammar_check',
   STYLE_TRANSFER = 'style_transfer',
   CONTINUITY_CHECK = 'continuity_check',
   PACING_ADJUST = 'pacing_adjust',
+  ANALYZE_TEXT = 'analyze_text',
   
   // Coach intents
   PLOT_OUTLINE = 'plot_outline',

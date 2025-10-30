@@ -2,7 +2,11 @@
   "name": "@worldbest/billing-service",
   "version": "1.0.0",
   "private": true,
+<<<<<<< HEAD
   "description": "Billing service for WorldBest platform - handles Stripe integration and subscription management",
+=======
+  "description": "Billing service with Stripe integration and subscription management",
+>>>>>>> 96f231cb21277b8c88265b316e50036aaa665227
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -21,23 +25,34 @@
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.1",
     "stripe": "^14.9.0",
+<<<<<<< HEAD
     "webhook": "^1.1.1",
     "cron": "^3.1.6",
     "bull": "^4.12.2",
+=======
+    "axios": "^1.6.2",
+>>>>>>> 96f231cb21277b8c88265b316e50036aaa665227
     "redis": "^4.6.10",
     "@worldbest/shared-types": "workspace:*",
     "@worldbest/database": "workspace:*",
     "winston": "^3.11.0",
     "dotenv": "^16.3.1",
     "uuid": "^9.0.1",
+<<<<<<< HEAD
     "moment": "^2.29.4",
     "decimal.js": "^10.4.3",
     "node-fetch": "^3.3.2"
+=======
+    "lodash": "^4.17.21",
+    "date-fns": "^2.30.0",
+    "node-cron": "^3.0.3"
+>>>>>>> 96f231cb21277b8c88265b316e50036aaa665227
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
     "@types/compression": "^1.7.5",
+<<<<<<< HEAD
     "@types/cron": "^2.4.0",
     "@types/bull": "^4.10.0",
     "@types/uuid": "^9.0.7",
@@ -58,4 +73,24 @@
     "payment",
     "worldbest"
   ]
+=======
+    "@types/uuid": "^9.0.7",
+    "@types/lodash": "^4.14.202",
+    "@types/node": "^20.10.0",
+    "@types/node-cron": "^3.0.11",
+    "typescript": "^5.3.2",
+    "tsx": "^4.6.2",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.8",
+    "ts-jest": "^29.1.1",
+    "eslint": "^8.55.0",
+    "@typescript-eslint/parser": "^6.13.1",
+    "@typescript-eslint/eslint-plugin": "^6.13.1",
+    "supertest": "^6.3.3",
+    "@types/supertest": "^6.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+>>>>>>> 96f231cb21277b8c88265b316e50036aaa665227
 }
